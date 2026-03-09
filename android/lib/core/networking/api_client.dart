@@ -46,7 +46,22 @@ class ApiClient {
         port: metadata.port,
         serviceType: metadata.serviceType,
         websocketPath: metadata.websocketPath,
-        wakeTarget: device.wakeTarget,
+        wakeTarget: device.routeForHost(device.host)?.wakeTarget ??
+            metadata.routeForHost(device.host)?.wakeTarget ??
+            device.wakeTarget ??
+            metadata.wakeTarget,
+        networkRoutes: mergeNetworkRoutes(
+          metadata.networkRoutes,
+          device.networkRoutes,
+        ),
+        preferredRouteHost: device.preferredRouteHost ??
+            metadata.networkRoutes
+                .where((NetworkRoute route) => route.preferred)
+                .map((NetworkRoute route) => route.host)
+                .firstOrNull,
+        lastSuccessfulRouteHost: device.lastSuccessfulRouteHost,
+        lastSeenAt: DateTime.now().toUtc(),
+        lastConnectedAt: device.lastConnectedAt,
       );
     } finally {
       httpClient.close();

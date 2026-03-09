@@ -24,14 +24,21 @@ func TestCreateAndConsumeSession(t *testing.T) {
 		[]Network{
 			{
 				Name:          "Wi-Fi",
+				FriendlyName:  "Wi-Fi",
+				Description:   "Wi-Fi adapter",
+				Kind:          "wifi",
 				Host:          "192.168.1.50",
 				WakeMAC:       "AA:BB:CC:DD:EE:FF",
 				WakeBroadcast: "192.168.1.255",
 				WakePort:      9,
 			},
 			{
-				Name: "Tailscale",
-				Host: "100.64.0.10",
+				Name:         "Tailscale",
+				FriendlyName: "Tailscale",
+				Description:  "Tailscale VPN tunnel",
+				Kind:         "vpn",
+				Host:         "100.64.0.10",
+				IsVirtual:    true,
 			},
 		},
 	)

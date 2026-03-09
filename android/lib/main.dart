@@ -10,6 +10,7 @@ import 'core/models/device.dart';
 import 'core/models/pairing.dart';
 import 'core/models/remote_layout.dart';
 import 'core/networking/api_client.dart';
+import 'core/networking/device_connection_resolver.dart';
 import 'core/networking/discovery.dart';
 import 'core/networking/pairing_host_resolver.dart';
 import 'core/networking/wake_on_lan_client.dart';
@@ -27,6 +28,7 @@ import 'features/mouse_remote/mouse_screen.dart';
 import 'features/remote_designer/remote_designer_screen.dart';
 import 'features/task_manager/task_manager_screen.dart';
 import 'ui/themes/app_theme.dart';
+import 'ui/widgets/network_route_icons.dart';
 
 void main() {
   runApp(const OpenRemoteApp());
@@ -92,6 +94,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   StreamSubscription<List<SharedMediaFile>>? _shareIntentSub;
   bool _loading = true;
   bool _uploadingSharedFiles = false;
+  bool _preferLocalRoutes = true;
   String _status = 'Ready';
   _AppSection _currentSection = _AppSection.dashboard;
 
@@ -134,6 +137,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _recentDeviceIds = persisted.recentDeviceIds;
       _favoriteRemoteIds = persisted.favoriteRemoteIds;
       _selectedDevice = preferredDevice;
+      _preferLocalRoutes = persisted.preferLocalRoutes;
       _loading = false;
     });
 
@@ -166,43 +170,67 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _status = 'Connecting to ${device.name}';
     });
 
+    Object? lastError;
     try {
-      final resolvedDevice = await _apiClient.fetchMeta(device);
-      await _client.connect(
-        resolvedDevice.websocketUrl,
-        accessToken: resolvedDevice.accessToken,
+      final candidates = deviceConnectionCandidates(
+        device,
+        preferLocalRoutes: _preferLocalRoutes,
       );
-      final remoteCatalog = await _apiClient.fetchRemoteCatalog(resolvedDevice);
-      if (!mounted) {
-        return;
+
+      for (final NetworkRoute route in candidates) {
+        final routeDevice = deviceWithRoute(device, route);
+        try {
+          final resolvedDevice = await _apiClient.fetchMeta(routeDevice);
+          await _client.connect(
+            resolvedDevice.websocketUrl,
+            accessToken: resolvedDevice.accessToken,
+          );
+          final remoteCatalog = await _apiClient.fetchRemoteCatalog(
+            resolvedDevice,
+          );
+          if (!mounted) {
+            return;
+          }
+
+          final connectedDevice = _recordConnectionSuccess(
+            resolvedDevice,
+            routeHost: route.host,
+            rememberRoute: device.preferredRouteHost?.trim().isNotEmpty != true,
+          );
+          final mergedRemotes = remoteCatalog.isNotEmpty
+              ? _mergeRemoteLayouts(
+                  _bundledRemotes,
+                  remoteCatalog,
+                  _designedRemoteLayouts,
+                )
+              : _mergeRemoteLayouts(
+                  _bundledRemotes,
+                  _cachedRemoteLayouts,
+                  _designedRemoteLayouts,
+                );
+
+          setState(() {
+            _selectedDevice = connectedDevice;
+            _cachedRemoteLayouts =
+                remoteCatalog.isNotEmpty ? remoteCatalog : _cachedRemoteLayouts;
+            _remotes = mergedRemotes;
+            _devices = _replaceOrInsertDevice(connectedDevice);
+            _recentDeviceIds = _recordRecentDevice(connectedDevice.id);
+            _status = announceRestore
+                ? 'Connected to ${connectedDevice.name}'
+                : 'Restored ${connectedDevice.name}';
+          });
+
+          await _persistState();
+          await _flushPendingShares();
+          return;
+        } catch (error) {
+          lastError = error;
+        }
       }
 
-      final mergedRemotes = remoteCatalog.isNotEmpty
-          ? _mergeRemoteLayouts(
-              _bundledRemotes,
-              remoteCatalog,
-              _designedRemoteLayouts,
-            )
-          : _mergeRemoteLayouts(
-              _bundledRemotes,
-              _cachedRemoteLayouts,
-              _designedRemoteLayouts,
-            );
-
-      setState(() {
-        _selectedDevice = resolvedDevice;
-        _cachedRemoteLayouts =
-            remoteCatalog.isNotEmpty ? remoteCatalog : _cachedRemoteLayouts;
-        _remotes = mergedRemotes;
-        _devices = _replaceOrInsertDevice(resolvedDevice);
-        _recentDeviceIds = _recordRecentDevice(resolvedDevice.id);
-        _status = announceRestore
-            ? 'Connected to ${resolvedDevice.name}'
-            : 'Restored ${resolvedDevice.name}';
-      });
-
-      await _persistState();
-      await _flushPendingShares();
+      throw lastError ??
+          const SocketException('No reachable device route found.');
     } catch (error) {
       if (!mounted) {
         return;
@@ -336,7 +364,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Wake-capable LAN routes are listed separately from remote-only routes such as VPN addresses.',
+                  'Pick a transport explicitly, or let the app decide based on your saved preference for local-first versus remembered routes.',
                 ),
                 const SizedBox(height: 16),
                 ListTile(
@@ -354,11 +382,24 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      option.canWake ? Icons.wifi : Icons.vpn_key,
+                      networkRouteIcon(
+                        option.kind,
+                        canWake: option.canWake,
+                        isVirtual: option.isVirtual,
+                      ),
                     ),
                     title: Text(option.displayName),
                     subtitle: Text(
-                      '${option.host} • ${option.canWake ? 'Wake-on-LAN available' : 'No Wake-on-LAN'}',
+                      [
+                        option.kindLabel,
+                        option.host,
+                        if (option.description.trim().isNotEmpty)
+                          option.description,
+                        if (option.preferred) 'Preferred by agent',
+                        option.canWake
+                            ? 'Wake-on-LAN available'
+                            : 'No Wake-on-LAN',
+                      ].join(' • '),
                     ),
                     onTap: () => Navigator.of(context).pop(
                       _PairingRouteChoice.network(option),
@@ -383,12 +424,23 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
   Future<Device> _completePairing(PairingPayload pairing) async {
     Object? lastNetworkError;
-    final candidates = pairingHostCandidates(pairing, _devices);
+    final candidates = pairingHostCandidates(
+      pairing,
+      _devices,
+      preferLocalRoutes: _preferLocalRoutes,
+    );
 
     for (final candidate in candidates) {
       try {
-        return await _apiClient.completePairing(
-            candidate, 'OpenRemote Android');
+        final pairedDevice = await _apiClient.completePairing(
+          candidate,
+          'OpenRemote Android',
+        );
+        final now = DateTime.now().toUtc();
+        return pairedDevice.copyWith(
+          preferredRouteHost: candidate.host,
+          lastSeenAt: now,
+        );
       } on SocketException catch (error) {
         lastNetworkError = error;
       }
@@ -408,6 +460,36 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       } else {
         _favoriteDeviceIds = <String>{..._favoriteDeviceIds, device.id};
       }
+    });
+    await _persistState();
+  }
+
+  Future<void> _setPreferredRoute(Device device, NetworkRoute route) async {
+    final updatedDevice = deviceWithRoute(
+      device,
+      route,
+      markPreferred: true,
+    ).copyWith(
+      lastSeenAt: DateTime.now().toUtc(),
+    );
+
+    setState(() {
+      _devices = _replaceOrInsertDevice(updatedDevice);
+      if (_selectedDevice?.id == device.id) {
+        _selectedDevice = updatedDevice;
+      }
+      _status = 'Preferred route set to ${route.displayName}';
+    });
+
+    await _persistState();
+  }
+
+  Future<void> _setPreferLocalRoutes(bool value) async {
+    setState(() {
+      _preferLocalRoutes = value;
+      _status = value
+          ? 'Local routes will be preferred when available'
+          : 'Preferred or last-working routes will be tried first';
     });
     await _persistState();
   }
@@ -645,6 +727,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         cachedRemoteLayouts: _cachedRemoteLayouts,
         designedRemoteLayouts: _designedRemoteLayouts,
         selectedDeviceId: _selectedDevice?.id,
+        preferLocalRoutes: _preferLocalRoutes,
       ),
     );
   }
@@ -654,8 +737,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     List<Device> discoveredDevices,
   ) {
     final merged = <String, Device>{};
+    final seenAt = DateTime.now().toUtc();
     for (final Device device in discoveredDevices) {
-      merged[device.id] = device;
+      merged[device.id] = device.copyWith(
+        lastSeenAt: seenAt,
+      );
     }
     for (final Device device in pairedDevices) {
       final existing = merged[device.id];
@@ -667,6 +753,17 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               websocketPath: existing.websocketPath,
               serviceType: existing.serviceType,
               wakeTarget: existing.wakeTarget ?? device.wakeTarget,
+              networkRoutes: mergeNetworkRoutes(
+                device.networkRoutes,
+                existing.networkRoutes,
+              ),
+              preferredRouteHost:
+                  device.preferredRouteHost ?? existing.preferredRouteHost,
+              lastSuccessfulRouteHost: device.lastSuccessfulRouteHost ??
+                  existing.lastSuccessfulRouteHost,
+              lastSeenAt: existing.lastSeenAt ?? device.lastSeenAt,
+              lastConnectedAt:
+                  device.lastConnectedAt ?? existing.lastConnectedAt,
             );
     }
     return merged.values.toList();
@@ -738,6 +835,31 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       deviceID,
       ..._recentDeviceIds.where((String existing) => existing != deviceID),
     ].take(8).toList();
+  }
+
+  Device _recordConnectionSuccess(
+    Device device, {
+    required String routeHost,
+    bool rememberRoute = false,
+  }) {
+    final now = DateTime.now().toUtc();
+    final currentRoute = device.routeForHost(routeHost) ??
+        NetworkRoute(
+          host: routeHost,
+          friendlyName: routeHost,
+          kind: inferNetworkKindFromHost(routeHost),
+          wakeTarget: device.wakeTarget,
+        );
+
+    return deviceWithRoute(
+      device.copyWith(
+        lastSeenAt: now,
+        lastConnectedAt: now,
+        lastSuccessfulRouteHost: routeHost,
+      ),
+      currentRoute,
+      markPreferred: rememberRoute,
+    );
   }
 
   List<Device> _orderedDevices() {
@@ -896,12 +1018,15 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         favoriteDeviceIds: _favoriteDeviceIds,
         recentDeviceIds: _recentDeviceIds,
         statusMessage: _status,
+        preferLocalRoutes: _preferLocalRoutes,
         onConnect: _connectToDevice,
         onWake: _wakeDevice,
         onPairUriSubmit: _pairWithUri,
         onToggleFavoriteDevice: _toggleFavoriteDevice,
         onDeleteDevice: _deleteDevice,
         onRefreshDevices: _refreshDevices,
+        onSetPreferredRoute: _setPreferredRoute,
+        onPreferLocalRoutesChanged: _setPreferLocalRoutes,
       ),
       MouseScreen(
         enabled: _client.isConnected,

@@ -7,9 +7,14 @@ import (
 )
 
 type NetworkPath struct {
-	Name       string
-	Host       string
-	WakeTarget *WakeTarget
+	Name         string
+	FriendlyName string
+	Description  string
+	Kind         string
+	Host         string
+	IsVirtual    bool
+	Preferred    bool
+	WakeTarget   *WakeTarget
 }
 
 func LocalNetworkPaths(preferredHost string, explicit WakeTarget) ([]NetworkPath, error) {
@@ -53,9 +58,15 @@ func LocalNetworkPaths(preferredHost string, explicit WakeTarget) ([]NetworkPath
 			}
 			seenHosts[dedupeKey] = struct{}{}
 
+			kind, description, isVirtual := classifyInterface(iface.Name)
 			path := NetworkPath{
-				Name: iface.Name,
-				Host: host,
+				Name:         iface.Name,
+				FriendlyName: strings.TrimSpace(iface.Name),
+				Description:  description,
+				Kind:         kind,
+				Host:         host,
+				IsVirtual:    isVirtual,
+				Preferred:    equalFoldTrimmed(host, preferredHost),
 			}
 			if wakeTarget, ok := wakeTargetForInterface(iface, network, normalizedExplicit); ok {
 				copy := wakeTarget
@@ -129,4 +140,59 @@ func wakeTargetForInterface(iface net.Interface, network *net.IPNet, explicit Wa
 
 func equalFoldTrimmed(left string, right string) bool {
 	return strings.EqualFold(strings.TrimSpace(left), strings.TrimSpace(right))
+}
+
+func classifyInterface(name string) (kind string, description string, isVirtual bool) {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+
+	switch {
+	case containsAny(normalized, "tailscale"):
+		return "vpn", "Tailscale VPN tunnel", true
+	case containsAny(
+		normalized,
+		"wireguard",
+		"wintun",
+		"zerotier",
+		"vpn",
+		"openvpn",
+		"tun",
+		"tap",
+		"ppp",
+		"ipsec",
+		"hamachi",
+		"cisco anyconnect",
+	):
+		return "vpn", "VPN or overlay tunnel", true
+	case containsAny(normalized, "wi-fi", "wifi", "wlan", "wireless"):
+		return "wifi", "Wi-Fi adapter", false
+	case containsAny(normalized, "usb"):
+		return "usb", "USB network adapter", false
+	case containsAny(
+		normalized,
+		"docker",
+		"hyper-v",
+		"vethernet",
+		"vmware",
+		"virtualbox",
+		"vbox",
+		"bridge",
+		"virtual",
+		"loopback",
+	):
+		return "virtual", "Virtual network adapter", true
+	case strings.HasPrefix(normalized, "eth"), containsAny(normalized, "ethernet", "gigabit", "lan"):
+		return "ethernet", "Ethernet adapter", false
+	default:
+		return "unknown", "Network adapter", false
+	}
+}
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+
+	return false
 }

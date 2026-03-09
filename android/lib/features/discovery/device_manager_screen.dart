@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/device.dart';
+import '../../ui/widgets/network_route_icons.dart';
 import 'qr_scanner_screen.dart';
 
 class DeviceManagerScreen extends StatefulWidget {
@@ -11,12 +12,15 @@ class DeviceManagerScreen extends StatefulWidget {
     required this.favoriteDeviceIds,
     required this.recentDeviceIds,
     required this.statusMessage,
+    required this.preferLocalRoutes,
     required this.onConnect,
     required this.onWake,
     required this.onPairUriSubmit,
     required this.onToggleFavoriteDevice,
     required this.onDeleteDevice,
     required this.onRefreshDevices,
+    required this.onSetPreferredRoute,
+    required this.onPreferLocalRoutesChanged,
   });
 
   final List<Device> devices;
@@ -24,12 +28,16 @@ class DeviceManagerScreen extends StatefulWidget {
   final Set<String> favoriteDeviceIds;
   final List<String> recentDeviceIds;
   final String statusMessage;
+  final bool preferLocalRoutes;
   final Future<void> Function(Device device) onConnect;
   final Future<void> Function(Device device) onWake;
   final Future<void> Function(String pairUri) onPairUriSubmit;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
   final Future<void> Function(Device device) onDeleteDevice;
   final Future<void> Function() onRefreshDevices;
+  final Future<void> Function(Device device, NetworkRoute route)
+      onSetPreferredRoute;
+  final Future<void> Function(bool value) onPreferLocalRoutesChanged;
 
   @override
   State<DeviceManagerScreen> createState() => _DeviceManagerScreenState();
@@ -84,6 +92,28 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
     }
   }
 
+  Future<void> _showDeviceDetails(Device device) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: _DeviceDetailsSheet(
+              device: device,
+              onSetPreferredRoute: (NetworkRoute route) async {
+                Navigator.of(context).pop();
+                await widget.onSetPreferredRoute(device, route);
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -121,6 +151,16 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: widget.preferLocalRoutes,
+                  title: const Text('Prefer local LAN when available'),
+                  subtitle: const Text(
+                    'When enabled, Wi-Fi and Ethernet routes are tried before VPN and remote-only paths.',
+                  ),
+                  onChanged: widget.onPreferLocalRoutesChanged,
+                ),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -198,6 +238,7 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                 onWake: widget.onWake,
                 onToggleFavoriteDevice: widget.onToggleFavoriteDevice,
                 onDeleteDevice: _confirmDelete,
+                onShowDetails: _showDeviceDetails,
               ),
             ),
           ),
@@ -216,6 +257,7 @@ class _ManagedDeviceCard extends StatelessWidget {
     required this.onWake,
     required this.onToggleFavoriteDevice,
     required this.onDeleteDevice,
+    required this.onShowDetails,
   });
 
   final Device device;
@@ -226,20 +268,37 @@ class _ManagedDeviceCard extends StatelessWidget {
   final Future<void> Function(Device device) onWake;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
   final Future<void> Function(Device device) onDeleteDevice;
+  final Future<void> Function(Device device) onShowDetails;
 
   @override
   Widget build(BuildContext context) {
+    final primaryRoute = device.currentRoute ??
+        device.lastSuccessfulRoute ??
+        device.preferredRoute;
     final badges = <Widget>[
-      if (selectedDevice?.id == device.id) const _DeviceBadge(label: 'Current'),
+      if (selectedDevice?.id == device.id)
+        const _DeviceBadge(label: 'Current', icon: Icons.radio_button_checked),
       if (favoriteDeviceIds.contains(device.id))
-        const _DeviceBadge(label: 'Favorite'),
+        const _DeviceBadge(label: 'Favorite', icon: Icons.star),
       if (recentDeviceIds.contains(device.id))
-        const _DeviceBadge(label: 'Recent'),
+        const _DeviceBadge(label: 'Recent', icon: Icons.history),
       if ((device.accessToken ?? '').isNotEmpty)
-        const _DeviceBadge(label: 'Paired'),
-      if (device.canWake) const _DeviceBadge(label: 'Wake-ready'),
+        const _DeviceBadge(label: 'Paired', icon: Icons.verified_user_outlined),
+      if (primaryRoute != null)
+        _DeviceBadge(
+          label: primaryRoute.kindLabel,
+          icon: networkRouteIcon(
+            primaryRoute.kind,
+            canWake: primaryRoute.canWake,
+            isVirtual: primaryRoute.isVirtual,
+          ),
+        ),
+      if ((device.preferredRouteHost ?? '').trim().isNotEmpty)
+        const _DeviceBadge(label: 'Preferred route', icon: Icons.route),
+      if (device.hasWakeRoute)
+        const _DeviceBadge(label: 'Wake-ready', icon: Icons.power_settings_new),
       if ((device.accessToken ?? '').isEmpty)
-        const _DeviceBadge(label: 'Discovery only'),
+        const _DeviceBadge(label: 'Discovery only', icon: Icons.travel_explore),
     ];
 
     return Card(
@@ -261,6 +320,13 @@ class _ManagedDeviceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text('${device.host}:${device.port}'),
+                      if (primaryRoute != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          '${primaryRoute.kindLabel} route • ${primaryRoute.displayName}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -284,6 +350,19 @@ class _ManagedDeviceCard extends StatelessWidget {
               runSpacing: 8,
               children: badges,
             ),
+            if (primaryRoute != null &&
+                !primaryRoute.canWake &&
+                device.hasWakeRoute)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Wake-on-LAN is available only on a local route for this device.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -302,11 +381,117 @@ class _ManagedDeviceCard extends StatelessWidget {
                     icon: const Icon(Icons.power_settings_new),
                     label: const Text('Wake'),
                   ),
+                OutlinedButton.icon(
+                  onPressed: () => onShowDetails(device),
+                  icon: const Icon(Icons.info_outline),
+                  label: const Text('Details'),
+                ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DeviceDetailsSheet extends StatelessWidget {
+  const _DeviceDetailsSheet({
+    required this.device,
+    required this.onSetPreferredRoute,
+  });
+
+  final Device device;
+  final Future<void> Function(NetworkRoute route) onSetPreferredRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    final routes = device.networkRoutes;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          device.name,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        const SizedBox(height: 8),
+        Text('${device.host}:${device.port}'),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            _SummaryPill(
+              icon: Icons.visibility_outlined,
+              label: _formatTimestampLabel(
+                prefix: 'Last seen',
+                value: device.lastSeenAt,
+              ),
+            ),
+            _SummaryPill(
+              icon: Icons.link,
+              label: _formatTimestampLabel(
+                prefix: 'Last connected',
+                value: device.lastConnectedAt,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if ((device.lastSuccessfulRouteHost ?? '').trim().isNotEmpty)
+          Text(
+            'Last successful route: ${device.lastSuccessfulRoute?.displayName ?? device.lastSuccessfulRouteHost}',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        const SizedBox(height: 16),
+        Text(
+          'Advertised routes',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        if (routes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+                'No route metadata has been reported for this device yet.'),
+          )
+        else
+          ...routes.map(
+            (NetworkRoute route) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                networkRouteIcon(
+                  route.kind,
+                  canWake: route.canWake,
+                  isVirtual: route.isVirtual,
+                ),
+              ),
+              title: Text(route.displayName),
+              subtitle: Text(
+                [
+                  route.kindLabel,
+                  route.host,
+                  if (route.description.trim().isNotEmpty) route.description,
+                  if (route.canWake)
+                    'Wake-on-LAN available'
+                  else
+                    'No Wake-on-LAN',
+                ].join(' • '),
+              ),
+              trailing: route.host.trim().toLowerCase() ==
+                      (device.preferredRouteHost ?? '').trim().toLowerCase()
+                  ? const Icon(Icons.check_circle, color: Color(0xFF0F766E))
+                  : TextButton(
+                      onPressed: () => onSetPreferredRoute(route),
+                      child: const Text('Prefer'),
+                    ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -350,9 +535,11 @@ class _SummaryPill extends StatelessWidget {
 class _DeviceBadge extends StatelessWidget {
   const _DeviceBadge({
     required this.label,
+    this.icon,
   });
 
   final String label;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -363,13 +550,43 @@ class _DeviceBadge extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (icon != null) ...<Widget>[
+              Icon(icon, size: 14),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+String _formatTimestampLabel({
+  required String prefix,
+  required DateTime? value,
+}) {
+  if (value == null) {
+    return '$prefix unknown';
+  }
+
+  final delta = DateTime.now().toUtc().difference(value.toUtc());
+  if (delta.inMinutes < 1) {
+    return '$prefix just now';
+  }
+  if (delta.inHours < 1) {
+    return '$prefix ${delta.inMinutes}m ago';
+  }
+  if (delta.inDays < 1) {
+    return '$prefix ${delta.inHours}h ago';
+  }
+  return '$prefix ${delta.inDays}d ago';
 }

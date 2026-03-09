@@ -6,23 +6,70 @@ class PairingNetworkOption {
   const PairingNetworkOption({
     required this.host,
     this.name = '',
+    this.friendlyName = '',
+    this.description = '',
+    this.kind = NetworkTransportKind.unknown,
+    this.isVirtual = false,
+    this.preferred = false,
     this.wakeTarget,
   });
 
   final String host;
   final String name;
+  final String friendlyName;
+  final String description;
+  final String kind;
+  final bool isVirtual;
+  final bool preferred;
   final WakeTarget? wakeTarget;
 
   bool get canWake => wakeTarget?.isConfigured ?? false;
 
-  String get displayName => name.trim().isEmpty ? host : name;
+  bool get isLikelyLocal =>
+      canWake ||
+      kind == NetworkTransportKind.ethernet ||
+      kind == NetworkTransportKind.wifi ||
+      kind == NetworkTransportKind.usb;
+
+  String get displayName {
+    if (friendlyName.trim().isNotEmpty) {
+      return friendlyName;
+    }
+    if (name.trim().isNotEmpty) {
+      return name;
+    }
+    return host;
+  }
+
+  String get kindLabel => networkTransportLabel(kind);
 
   factory PairingNetworkOption.fromJson(Map<String, dynamic> json) {
     final wakeTarget = _parseWakeTarget(json);
     return PairingNetworkOption(
       host: json['host'] as String? ?? '',
       name: json['name'] as String? ?? '',
+      friendlyName: json['friendly_name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      kind: json['kind'] as String? ??
+          inferNetworkKindFromHost(
+            json['host'] as String? ?? '',
+          ),
+      isVirtual: json['is_virtual'] as bool? ?? false,
+      preferred: json['preferred'] as bool? ?? false,
       wakeTarget: wakeTarget?.isConfigured == true ? wakeTarget : null,
+    );
+  }
+
+  NetworkRoute toNetworkRoute({bool preferred = false}) {
+    return NetworkRoute(
+      host: host,
+      name: name,
+      friendlyName: friendlyName,
+      description: description,
+      kind: kind,
+      isVirtual: isVirtual,
+      preferred: preferred || this.preferred,
+      wakeTarget: wakeTarget,
     );
   }
 }
@@ -91,6 +138,15 @@ class PairingPayload {
       accessToken: accessToken,
       websocketPath: websocketPath,
       wakeTarget: wakeTarget,
+      networkRoutes: availableNetworks
+          .map(
+            (PairingNetworkOption option) => option.toNetworkRoute(
+              preferred:
+                  option.host.trim().toLowerCase() == host.trim().toLowerCase(),
+            ),
+          )
+          .toList(growable: false),
+      preferredRouteHost: host,
     );
   }
 
@@ -159,7 +215,21 @@ class PairingPayload {
     return withRoute(
       host: option.host,
       wakeTarget: option.wakeTarget,
-      networkOptions: <PairingNetworkOption>[option],
+      networkOptions: availableNetworks
+          .map(
+            (PairingNetworkOption existing) => PairingNetworkOption(
+              host: existing.host,
+              name: existing.name,
+              friendlyName: existing.friendlyName,
+              description: existing.description,
+              kind: existing.kind,
+              isVirtual: existing.isVirtual,
+              preferred: existing.host.trim().toLowerCase() ==
+                  option.host.trim().toLowerCase(),
+              wakeTarget: existing.wakeTarget,
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -217,6 +287,11 @@ List<PairingNetworkOption> _parseNetworkOptions(
       PairingNetworkOption(
         host: normalizedHost,
         name: option.name,
+        friendlyName: option.friendlyName,
+        description: option.description,
+        kind: option.kind,
+        isVirtual: option.isVirtual,
+        preferred: option.preferred,
         wakeTarget: option.wakeTarget,
       ),
     );

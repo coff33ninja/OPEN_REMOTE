@@ -5,8 +5,9 @@ import '../models/pairing.dart';
 
 List<PairingPayload> pairingHostCandidates(
   PairingPayload pairing,
-  Iterable<Device> discoveredDevices,
-) {
+  Iterable<Device> discoveredDevices, {
+  bool preferLocalRoutes = true,
+}) {
   final candidates = <PairingPayload>[];
   final seenHosts = <String>{};
 
@@ -32,7 +33,22 @@ List<PairingPayload> pairingHostCandidates(
     );
   }
 
-  for (final option in pairing.availableNetworks) {
+  final orderedNetworks = List<PairingNetworkOption>.from(
+    pairing.availableNetworks,
+  )..sort(
+      (PairingNetworkOption left, PairingNetworkOption right) =>
+          _networkPriority(
+        right,
+        preferLocalRoutes: preferLocalRoutes,
+      ).compareTo(
+        _networkPriority(
+          left,
+          preferLocalRoutes: preferLocalRoutes,
+        ),
+      ),
+    );
+
+  for (final option in orderedNetworks) {
     addCandidate(
       option.host,
       wakeTarget: option.wakeTarget,
@@ -62,3 +78,30 @@ List<PairingPayload> pairingHostCandidates(
 }
 
 bool _isLiteralIp(String host) => InternetAddress.tryParse(host.trim()) != null;
+
+int _networkPriority(
+  PairingNetworkOption option, {
+  required bool preferLocalRoutes,
+}) {
+  var score = 0;
+  if (preferLocalRoutes && option.isLikelyLocal) {
+    score += 400;
+  }
+  if (option.preferred) {
+    score += preferLocalRoutes ? 120 : 300;
+  }
+  if (option.canWake) {
+    score += preferLocalRoutes ? 100 : 20;
+  }
+  if (!preferLocalRoutes && option.isLikelyLocal) {
+    score += 40;
+  }
+  if (option.kind == NetworkTransportKind.configured) {
+    score -= 120;
+  }
+  if (option.kind == NetworkTransportKind.unknown) {
+    score -= 10;
+  }
+
+  return score;
+}

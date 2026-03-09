@@ -23,6 +23,17 @@ void main() {
         mac: 'AA:BB:CC:DD:EE:FF',
         broadcast: '192.168.0.255',
       ),
+      networkRoutes: const <NetworkRoute>[
+        NetworkRoute(
+          host: '192.168.0.10',
+          friendlyName: 'Wi-Fi',
+          kind: NetworkTransportKind.wifi,
+          wakeTarget: WakeTarget(
+            mac: 'AA:BB:CC:DD:EE:FF',
+            broadcast: '192.168.0.255',
+          ),
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -34,6 +45,7 @@ void main() {
             favoriteDeviceIds: const <String>{'desk'},
             recentDeviceIds: const <String>['desk'],
             statusMessage: 'Ready',
+            preferLocalRoutes: true,
             onConnect: (Device device) async {},
             onWake: (Device device) async {},
             onPairUriSubmit: (String pairUri) async {},
@@ -42,6 +54,8 @@ void main() {
               deleted.add(device.id);
             },
             onRefreshDevices: () async {},
+            onSetPreferredRoute: (Device device, NetworkRoute route) async {},
+            onPreferLocalRoutesChanged: (bool value) async {},
           ),
         ),
       ),

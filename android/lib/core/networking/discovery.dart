@@ -16,6 +16,7 @@ class DiscoveryService {
   Future<List<Device>> discover() async {
     final client = MDnsClient();
     final devices = <String, Device>{};
+    final seenAt = DateTime.now().toUtc();
 
     try {
       await client.start();
@@ -71,6 +72,14 @@ class DiscoveryService {
               port: srv.port,
               serviceType: serviceType,
               websocketPath: txtValues['ws_path'] ?? '/ws',
+              networkRoutes: <NetworkRoute>[
+                NetworkRoute(
+                  host: host,
+                  friendlyName: host,
+                  description: 'Discovered over mDNS',
+                  kind: inferNetworkKindFromHost(host),
+                ),
+              ],
               wakeTarget: txtValues['wake_mac'] == null
                   ? null
                   : WakeTarget(
@@ -78,6 +87,7 @@ class DiscoveryService {
                       broadcast: txtValues['wake_broadcast'] ?? '',
                       port: int.tryParse(txtValues['wake_port'] ?? '') ?? 9,
                     ),
+              lastSeenAt: seenAt,
             );
           }
         }

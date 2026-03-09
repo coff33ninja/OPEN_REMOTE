@@ -21,6 +21,9 @@ void main() {
             'networks': <Map<String, dynamic>>[
               <String, dynamic>{
                 'name': 'Wi-Fi',
+                'friendly_name': 'Wi-Fi',
+                'description': 'Wi-Fi adapter',
+                'kind': 'wifi',
                 'host': '192.168.1.50',
                 'wake_mac': 'AA:BB:CC:DD:EE:FF',
                 'wake_broadcast': '192.168.1.255',
@@ -28,6 +31,10 @@ void main() {
               },
               <String, dynamic>{
                 'name': 'Tailscale',
+                'friendly_name': 'Tailscale',
+                'description': 'Tailscale VPN tunnel',
+                'kind': 'vpn',
+                'is_virtual': true,
                 'host': '100.64.0.10',
               },
             ],
@@ -50,5 +57,8 @@ void main() {
         payload.availableNetworks.map((PairingNetworkOption item) => item.host),
         <String>['192.168.1.50', '100.64.0.10', '127.0.0.1']);
     expect(payload.availableNetworks.first.canWake, isTrue);
+    expect(payload.availableNetworks.first.kind, 'wifi');
+    expect(payload.availableNetworks[1].kind, 'vpn');
+    expect(payload.availableNetworks[1].isVirtual, isTrue);
   });
 }

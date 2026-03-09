@@ -132,6 +132,8 @@ func (a *Application) handleHealth(writer http.ResponseWriter, _ *http.Request) 
 }
 
 func (a *Application) handleMeta(writer http.ResponseWriter, _ *http.Request) {
+	networks := a.availablePairingNetworks()
+
 	payload := map[string]any{
 		"app_name":       a.config.AppName,
 		"device_name":    a.config.DeviceName,
@@ -141,6 +143,7 @@ func (a *Application) handleMeta(writer http.ResponseWriter, _ *http.Request) {
 		"websocket_path": a.config.WebSocketPath,
 		"service_type":   a.config.ServiceType,
 		"discovery":      a.discovery.Descriptor(),
+		"networks":       networks,
 	}
 	if wakeTarget := a.executor.WakeTarget(); wakeTarget.Valid() {
 		payload["wake_target"] = map[string]any{
@@ -402,14 +405,6 @@ func (a *Application) handlePairingPage(writer http.ResponseWriter, request *htt
 
 func (a *Application) newPairingSession() (pairing.Session, error) {
 	wakeTarget := a.executor.WakeTarget()
-	paths, err := system.LocalNetworkPaths(a.config.PublicHost, system.WakeTarget{
-		MAC:       a.config.WakeMAC,
-		Broadcast: a.config.WakeBroadcast,
-		Port:      a.config.WakePort,
-	})
-	if err != nil {
-		a.logger.Printf("pairing network discovery error: %v", err)
-	}
 
 	return a.pairing.CreateSession(
 		a.config.PublicHost,
@@ -420,7 +415,7 @@ func (a *Application) newPairingSession() (pairing.Session, error) {
 		wakeTarget.MAC,
 		wakeTarget.Broadcast,
 		wakeTarget.Port,
-		buildPairingNetworks(a.config.PublicHost, paths),
+		a.availablePairingNetworks(),
 	)
 }
 
@@ -783,4 +778,17 @@ func uniqueUploadPath(root string, fileName string) string {
 			return candidate
 		}
 	}
+}
+
+func (a *Application) availablePairingNetworks() []pairing.Network {
+	paths, err := system.LocalNetworkPaths(a.config.PublicHost, system.WakeTarget{
+		MAC:       a.config.WakeMAC,
+		Broadcast: a.config.WakeBroadcast,
+		Port:      a.config.WakePort,
+	})
+	if err != nil {
+		a.logger.Printf("pairing network discovery error: %v", err)
+	}
+
+	return buildPairingNetworks(a.config.PublicHost, paths)
 }

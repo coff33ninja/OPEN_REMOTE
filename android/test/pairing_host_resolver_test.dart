@@ -69,6 +69,53 @@ void main() {
     expect(candidates[1].wakeTarget, isNull);
   });
 
+  test('pairingHostCandidates can prefer remembered VPN-style routes', () {
+    const pairing = PairingPayload(
+      host: 'kusanagi',
+      port: 9876,
+      token: 'abcd',
+      deviceName: 'KUSANAGI',
+      serviceType: '_openremote._tcp',
+      websocketPath: '/ws',
+      networkOptions: <PairingNetworkOption>[
+        PairingNetworkOption(
+          name: 'Wi-Fi',
+          friendlyName: 'Wi-Fi',
+          kind: NetworkTransportKind.wifi,
+          host: '192.168.0.250',
+          wakeTarget: WakeTarget(
+            mac: 'AA:BB:CC:DD:EE:FF',
+            broadcast: '192.168.0.255',
+          ),
+        ),
+        PairingNetworkOption(
+          name: 'Tailscale',
+          friendlyName: 'Tailscale',
+          kind: NetworkTransportKind.vpn,
+          preferred: true,
+          isVirtual: true,
+          host: '100.64.0.10',
+        ),
+      ],
+    );
+
+    final candidates = pairingHostCandidates(
+      pairing,
+      const <Device>[],
+      preferLocalRoutes: false,
+    );
+
+    expect(
+      candidates.map((PairingPayload item) => item.host).toList(),
+      <String>[
+        '100.64.0.10',
+        '192.168.0.250',
+        'kusanagi',
+        'kusanagi.local',
+      ],
+    );
+  });
+
   test('pairingHostCandidates does not append .local for literal IP hosts', () {
     const pairing = PairingPayload(
       host: '192.168.0.250',

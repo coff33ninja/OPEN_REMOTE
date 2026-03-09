@@ -27,7 +27,12 @@ type Session struct {
 
 type Network struct {
 	Name          string `json:"name,omitempty"`
+	FriendlyName  string `json:"friendly_name,omitempty"`
+	Description   string `json:"description,omitempty"`
+	Kind          string `json:"kind,omitempty"`
 	Host          string `json:"host"`
+	IsVirtual     bool   `json:"is_virtual,omitempty"`
+	Preferred     bool   `json:"preferred,omitempty"`
 	WakeMAC       string `json:"wake_mac,omitempty"`
 	WakeBroadcast string `json:"wake_broadcast,omitempty"`
 	WakePort      int    `json:"wake_port,omitempty"`

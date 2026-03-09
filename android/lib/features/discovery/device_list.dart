@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/device.dart';
+import '../../ui/widgets/network_route_icons.dart';
 import 'qr_scanner_screen.dart';
 
 class DeviceListScreen extends StatefulWidget {
@@ -384,6 +385,10 @@ class _SelectedDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryRoute = device.currentRoute ??
+        device.lastSuccessfulRoute ??
+        device.preferredRoute;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -407,6 +412,13 @@ class _SelectedDeviceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text('${device.host}:${device.port}'),
+                      if (primaryRoute != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          '${primaryRoute.kindLabel} route • ${primaryRoute.displayName}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -432,6 +444,19 @@ class _SelectedDeviceCard extends StatelessWidget {
                 isConnected: isConnected,
               ),
             ),
+            if (primaryRoute != null &&
+                !primaryRoute.canWake &&
+                device.hasWakeRoute)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Wake-on-LAN is available on a local route, but not on the active ${primaryRoute.kindLabel.toLowerCase()} route.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -480,6 +505,10 @@ class _QuickDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primaryRoute = device.currentRoute ??
+        device.lastSuccessfulRoute ??
+        device.preferredRoute;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -498,6 +527,13 @@ class _QuickDeviceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text('${device.host}:${device.port}'),
+                      if (primaryRoute != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          '${primaryRoute.kindLabel} route • ${primaryRoute.displayName}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -522,6 +558,19 @@ class _QuickDeviceCard extends StatelessWidget {
                 selectedDevice: selectedDevice,
               ),
             ),
+            if (primaryRoute != null &&
+                !primaryRoute.canWake &&
+                device.hasWakeRoute)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Wake works only on a local route for this device.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -557,31 +606,67 @@ List<Widget> _deviceBadges({
   bool isConnected = false,
 }) {
   final badges = <Widget>[
+    if ((device.currentRoute ??
+            device.lastSuccessfulRoute ??
+            device.preferredRoute) !=
+        null)
+      _DeviceBadgeChip(
+        label: (device.currentRoute ??
+                device.lastSuccessfulRoute ??
+                device.preferredRoute)!
+            .kindLabel,
+        backgroundColor: const Color(0xFFE4ECF8),
+        icon: networkRouteIcon(
+          (device.currentRoute ??
+                  device.lastSuccessfulRoute ??
+                  device.preferredRoute)!
+              .kind,
+          canWake: (device.currentRoute ??
+                  device.lastSuccessfulRoute ??
+                  device.preferredRoute)!
+              .canWake,
+          isVirtual: (device.currentRoute ??
+                  device.lastSuccessfulRoute ??
+                  device.preferredRoute)!
+              .isVirtual,
+        ),
+      ),
     if (selectedDevice?.id == device.id)
       _DeviceBadgeChip(
         label: isConnected ? 'Live' : 'Selected',
         backgroundColor:
             isConnected ? const Color(0xFFD9F8E6) : const Color(0xFFE8F0FE),
+        icon: isConnected ? Icons.wifi : Icons.radio_button_checked,
       ),
     if (favoriteDeviceIds.contains(device.id))
       const _DeviceBadgeChip(
         label: 'Favorite',
         backgroundColor: Color(0xFFFCE7C3),
+        icon: Icons.star,
+      ),
+    if ((device.preferredRouteHost ?? '').trim().isNotEmpty)
+      const _DeviceBadgeChip(
+        label: 'Preferred route',
+        backgroundColor: Color(0xFFEDE2FA),
+        icon: Icons.route,
       ),
     if (recentDeviceIds.contains(device.id))
       const _DeviceBadgeChip(
         label: 'Recent',
         backgroundColor: Color(0xFFE9ECF5),
+        icon: Icons.history,
       ),
     if ((device.accessToken ?? '').isNotEmpty)
       const _DeviceBadgeChip(
         label: 'Paired',
         backgroundColor: Color(0xFFE5F4EA),
+        icon: Icons.verified_user_outlined,
       ),
-    if (device.canWake)
+    if (device.hasWakeRoute)
       const _DeviceBadgeChip(
         label: 'Wake-ready',
         backgroundColor: Color(0xFFF7E0D6),
+        icon: Icons.power_settings_new,
       ),
   ];
 
@@ -590,6 +675,7 @@ List<Widget> _deviceBadges({
           _DeviceBadgeChip(
             label: 'Discovered',
             backgroundColor: Color(0xFFF1F0EC),
+            icon: Icons.travel_explore,
           ),
         ]
       : badges;
@@ -599,10 +685,12 @@ class _DeviceBadgeChip extends StatelessWidget {
   const _DeviceBadgeChip({
     required this.label,
     required this.backgroundColor,
+    this.icon,
   });
 
   final String label;
   final Color backgroundColor;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -613,11 +701,20 @@ class _DeviceBadgeChip extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (icon != null) ...<Widget>[
+              Icon(icon, size: 14),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
         ),
       ),
     );
