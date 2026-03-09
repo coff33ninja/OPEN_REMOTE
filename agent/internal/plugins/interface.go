@@ -3,7 +3,9 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Command struct {
@@ -89,4 +91,45 @@ func (c Command) StringArg(name string, fallback string) string {
 	}
 
 	return fallback
+}
+
+func (c Command) StringSliceArg(name string) []string {
+	value, ok := c.Arguments[name]
+	if !ok || value == nil {
+		return nil
+	}
+
+	switch typed := value.(type) {
+	case []string:
+		return append([]string(nil), typed...)
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			switch concrete := item.(type) {
+			case string:
+				if trimmed := strings.TrimSpace(concrete); trimmed != "" {
+					values = append(values, trimmed)
+				}
+			case json.Number:
+				values = append(values, concrete.String())
+			default:
+				values = append(values, fmt.Sprint(concrete))
+			}
+		}
+		return values
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return nil
+		}
+		parts := strings.Split(typed, ",")
+		values := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				values = append(values, trimmed)
+			}
+		}
+		return values
+	default:
+		return nil
+	}
 }

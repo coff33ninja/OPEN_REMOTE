@@ -25,16 +25,6 @@ const (
 	mouseeventfWheel      = 0x0800
 
 	wheelDelta = 120
-
-	vkLeft           = 0x25
-	vkRight          = 0x27
-	vkVolumeMute     = 0xAD
-	vkVolumeDown     = 0xAE
-	vkVolumeUp       = 0xAF
-	vkMediaNextTrack = 0xB0
-	vkMediaPrevTrack = 0xB1
-	vkMediaStop      = 0xB2
-	vkMediaPlayPause = 0xB3
 )
 
 var (
@@ -117,29 +107,40 @@ func sendMouseWheel(vertical int32) error {
 }
 
 func sendVirtualKey(virtualKey uint16, extended bool) error {
+	return sendInputs([]input{
+		newKeyboardInput(virtualKey, extended, false),
+		newKeyboardInput(virtualKey, extended, true),
+	})
+}
+
+func sendVirtualKeyDown(virtualKey uint16, extended bool) error {
+	return sendInputs([]input{
+		newKeyboardInput(virtualKey, extended, false),
+	})
+}
+
+func sendVirtualKeyUp(virtualKey uint16, extended bool) error {
+	return sendInputs([]input{
+		newKeyboardInput(virtualKey, extended, true),
+	})
+}
+
+func newKeyboardInput(virtualKey uint16, extended bool, keyUp bool) input {
 	flags := uint32(0)
 	if extended {
 		flags |= keyeventfExtendedKey
 	}
-
-	inputs := []input{
-		{
-			Type: inputKeyboard,
-			Ki: keyboardInput{
-				VirtualKey: virtualKey,
-				Flags:      flags,
-			},
-		},
-		{
-			Type: inputKeyboard,
-			Ki: keyboardInput{
-				VirtualKey: virtualKey,
-				Flags:      flags | keyeventfKeyUp,
-			},
-		},
+	if keyUp {
+		flags |= keyeventfKeyUp
 	}
 
-	return sendInputs(inputs)
+	return input{
+		Type: inputKeyboard,
+		Ki: keyboardInput{
+			VirtualKey: virtualKey,
+			Flags:      flags,
+		},
+	}
 }
 
 func sendUnicodeText(text string) error {

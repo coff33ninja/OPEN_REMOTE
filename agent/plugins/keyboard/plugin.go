@@ -29,19 +29,39 @@ func (p *Plugin) Manifest() internalplugins.Manifest {
 		ID:          p.ID(),
 		Name:        p.Name(),
 		Category:    "input",
-		Description: "Text input commands",
-		Commands:    []string{"keyboard_type"},
+		Description: "Text input, single-key, and shortcut commands",
+		Commands: []string{
+			"keyboard_type",
+			"keyboard_press",
+			"keyboard_key_down",
+			"keyboard_key_up",
+			"keyboard_shortcut",
+		},
 	}
 }
 
 func (p *Plugin) Supports(command internalplugins.Command) bool {
-	return command.CommandName() == "keyboard_type"
+	switch command.CommandName() {
+	case "keyboard_type", "keyboard_press", "keyboard_key_down", "keyboard_key_up", "keyboard_shortcut":
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Plugin) Execute(_ context.Context, command internalplugins.Command) error {
-	if command.CommandName() != "keyboard_type" {
+	switch command.CommandName() {
+	case "keyboard_type":
+		return p.executor.TypeText(command.StringArg("text", ""))
+	case "keyboard_press":
+		return p.executor.PressKey(command.StringArg("key", ""))
+	case "keyboard_key_down":
+		return p.executor.KeyDown(command.StringArg("key", ""))
+	case "keyboard_key_up":
+		return p.executor.KeyUp(command.StringArg("key", ""))
+	case "keyboard_shortcut":
+		return p.executor.Shortcut(command.StringSliceArg("keys"))
+	default:
 		return fmt.Errorf("unsupported keyboard command %q", command.CommandName())
 	}
-
-	return p.executor.TypeText(command.StringArg("text", ""))
 }
