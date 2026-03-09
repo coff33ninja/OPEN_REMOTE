@@ -1,0 +1,34 @@
+{
+  "id": "media-remote",
+  "name": "Media Remote",
+  "category": "media",
+  "layout": [
+    {
+      "id": "toggle",
+      "type": "button",
+      "label": "Play / Pause",
+      "command": "media_toggle"
+    },
+    {
+      "id": "previous",
+      "type": "button",
+      "label": "Previous",
+      "command": "media_previous"
+    },
+    {
+      "id": "next",
+      "type": "button",
+      "label": "Next",
+      "command": "media_next"
+    },
+    {
+      "id": "volume",
+      "type": "slider",
+      "label": "Volume",
+      "command": "volume_set",
+      "min": 0,
+      "max": 100,
+      "step": 5
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "presentation-remote",
+  "name": "Presentation Remote",
+  "category": "presentation",
+  "layout": [
+    {
+      "id": "previous-slide",
+      "type": "button",
+      "label": "Previous Slide",
+      "command": "presentation_previous"
+    },
+    {
+      "id": "next-slide",
+      "type": "button",
+      "label": "Next Slide",
+      "command": "presentation_next"
+    },
+    {
+      "id": "blackout",
+      "type": "button",
+      "label": "Blackout",
+      "command": "presentation_blackout"
+    }
+  ]
+}

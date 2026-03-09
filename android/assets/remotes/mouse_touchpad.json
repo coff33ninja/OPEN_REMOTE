@@ -1,0 +1,31 @@
+{
+  "id": "mouse-touchpad",
+  "name": "Mouse Touchpad",
+  "category": "input",
+  "layout": [
+    {
+      "id": "touchpad",
+      "type": "touchpad",
+      "label": "Touchpad",
+      "command": "mouse_move"
+    },
+    {
+      "id": "left-click",
+      "type": "button",
+      "label": "Left Click",
+      "command": "mouse_click",
+      "props": {
+        "button": "left"
+      }
+    },
+    {
+      "id": "right-click",
+      "type": "button",
+      "label": "Right Click",
+      "command": "mouse_click",
+      "props": {
+        "button": "right"
+      }
+    }
+  ]
+}

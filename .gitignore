@@ -1,0 +1,21 @@
+
+# Ignore VS Code AI rules
+.github/instructions/codacy.instructions.md
+
+# Go
+agent/openremote-agent.exe
+agent/bin/
+agent/coverage.out
+
+# Agent runtime data
+agent/data/
+
+# Flutter / Dart
+android/.dart_tool/
+android/build/
+android/.flutter-plugins
+android/.flutter-plugins-dependencies
+android/pubspec.lock
+
+# IDE
+.idea/

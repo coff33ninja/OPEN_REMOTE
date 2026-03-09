@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openremote.local/protocol/command-envelope.schema.json",
+  "title": "OpenRemote command envelope",
+  "type": "object",
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "remote_id": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "arguments": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

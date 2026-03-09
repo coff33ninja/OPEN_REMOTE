@@ -1,0 +1,26 @@
+{
+  "id": "movie-mode",
+  "name": "Movie Mode",
+  "category": "automation",
+  "layout": [
+    {
+      "id": "movie-mode-run",
+      "type": "macro_button",
+      "label": "Movie Mode",
+      "command": "macro_run",
+      "props": {
+        "steps": [
+          {
+            "name": "volume_set",
+            "arguments": {
+              "value": 40
+            }
+          },
+          {
+            "name": "media_toggle"
+          }
+        ]
+      }
+    }
+  ]
+}

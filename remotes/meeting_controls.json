@@ -1,0 +1,82 @@
+{
+  "id": "meeting-controls",
+  "name": "Meeting Controls",
+  "category": "productivity",
+  "layout": [
+    {
+      "id": "slides-dpad",
+      "type": "dpad",
+      "label": "Slides",
+      "props": {
+        "left": {
+          "label": "Prev",
+          "command": "presentation_previous"
+        },
+        "right": {
+          "label": "Next",
+          "command": "presentation_next"
+        },
+        "up": {
+          "label": "Louder",
+          "command": "volume_set",
+          "props": {
+            "value": 70
+          }
+        },
+        "down": {
+          "label": "Quieter",
+          "command": "volume_set",
+          "props": {
+            "value": 25
+          }
+        },
+        "center": {
+          "label": "Blank",
+          "command": "presentation_blackout"
+        }
+      }
+    },
+    {
+      "id": "meeting-grid",
+      "type": "grid_buttons",
+      "label": "Quick Actions",
+      "props": {
+        "columns": 2,
+        "buttons": [
+          {
+            "label": "Play/Pause",
+            "command": "media_toggle"
+          },
+          {
+            "label": "Stop",
+            "command": "media_stop"
+          },
+          {
+            "label": "Quiet Room",
+            "command": "volume_set",
+            "props": {
+              "value": 0
+            }
+          },
+          {
+            "label": "Movie Mode",
+            "command": "macro_run",
+            "props": {
+              "steps": [
+                {
+                  "name": "volume_set",
+                  "arguments": {
+                    "value": 40
+                  }
+                },
+                {
+                  "name": "media_toggle"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

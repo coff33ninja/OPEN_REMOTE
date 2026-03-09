@@ -1,0 +1,12 @@
+{
+  "id": "spotify-remote",
+  "name": "Spotify Remote",
+  "version": "0.1.0",
+  "category": "media",
+  "commands": [
+    "spotify_play",
+    "spotify_pause",
+    "spotify_next"
+  ],
+  "min_agent_version": "0.1.0"
+}
