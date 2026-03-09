@@ -39,6 +39,7 @@ func TestPairingCompleteIssuesToken(t *testing.T) {
 		"",
 		"",
 		0,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("CreateSession() error = %v", err)

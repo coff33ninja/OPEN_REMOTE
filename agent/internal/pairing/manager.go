@@ -21,7 +21,16 @@ type Session struct {
 	WakeMAC       string    `json:"wake_mac,omitempty"`
 	WakeBroadcast string    `json:"wake_broadcast,omitempty"`
 	WakePort      int       `json:"wake_port,omitempty"`
+	Networks      []Network `json:"networks,omitempty"`
 	ExpiresAt     time.Time `json:"expires_at"`
+}
+
+type Network struct {
+	Name          string `json:"name,omitempty"`
+	Host          string `json:"host"`
+	WakeMAC       string `json:"wake_mac,omitempty"`
+	WakeBroadcast string `json:"wake_broadcast,omitempty"`
+	WakePort      int    `json:"wake_port,omitempty"`
 }
 
 type Manager struct {
@@ -48,6 +57,7 @@ func (m *Manager) CreateSession(
 	wakeMAC string,
 	wakeBroadcast string,
 	wakePort int,
+	networks []Network,
 ) (Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -75,6 +85,9 @@ func (m *Manager) CreateSession(
 	if wakePort > 0 {
 		payload["wake_port"] = wakePort
 	}
+	if len(networks) > 0 {
+		payload["networks"] = networks
+	}
 
 	encoded, err := encodePayload(payload)
 	if err != nil {
@@ -94,6 +107,7 @@ func (m *Manager) CreateSession(
 		WakeMAC:       wakeMAC,
 		WakeBroadcast: wakeBroadcast,
 		WakePort:      wakePort,
+		Networks:      append([]Network(nil), networks...),
 		ExpiresAt:     expiresAt,
 	}, nil
 }

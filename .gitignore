@@ -17,5 +17,12 @@ android/.flutter-plugins
 android/.flutter-plugins-dependencies
 android/pubspec.lock
 
+# Local release staging
+release-artifacts/
+
 # IDE
 .idea/
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

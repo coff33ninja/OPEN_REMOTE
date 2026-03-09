@@ -402,6 +402,15 @@ func (a *Application) handlePairingPage(writer http.ResponseWriter, request *htt
 
 func (a *Application) newPairingSession() (pairing.Session, error) {
 	wakeTarget := a.executor.WakeTarget()
+	paths, err := system.LocalNetworkPaths(a.config.PublicHost, system.WakeTarget{
+		MAC:       a.config.WakeMAC,
+		Broadcast: a.config.WakeBroadcast,
+		Port:      a.config.WakePort,
+	})
+	if err != nil {
+		a.logger.Printf("pairing network discovery error: %v", err)
+	}
+
 	return a.pairing.CreateSession(
 		a.config.PublicHost,
 		a.config.Port,
@@ -411,6 +420,7 @@ func (a *Application) newPairingSession() (pairing.Session, error) {
 		wakeTarget.MAC,
 		wakeTarget.Broadcast,
 		wakeTarget.Port,
+		buildPairingNetworks(a.config.PublicHost, paths),
 	)
 }
 

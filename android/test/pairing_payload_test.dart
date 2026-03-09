@@ -18,6 +18,19 @@ void main() {
             'wake_mac': 'AA:BB:CC:DD:EE:FF',
             'wake_broadcast': '192.168.1.255',
             'wake_port': 9,
+            'networks': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'name': 'Wi-Fi',
+                'host': '192.168.1.50',
+                'wake_mac': 'AA:BB:CC:DD:EE:FF',
+                'wake_broadcast': '192.168.1.255',
+                'wake_port': 9,
+              },
+              <String, dynamic>{
+                'name': 'Tailscale',
+                'host': '100.64.0.10',
+              },
+            ],
           },
         ),
       ),
@@ -33,5 +46,9 @@ void main() {
     expect(payload.websocketPath, '/ws');
     expect(payload.wakeTarget?.mac, 'AA:BB:CC:DD:EE:FF');
     expect(payload.wakeTarget?.broadcast, '192.168.1.255');
+    expect(
+        payload.availableNetworks.map((PairingNetworkOption item) => item.host),
+        <String>['192.168.1.50', '100.64.0.10', '127.0.0.1']);
+    expect(payload.availableNetworks.first.canWake, isTrue);
   });
 }

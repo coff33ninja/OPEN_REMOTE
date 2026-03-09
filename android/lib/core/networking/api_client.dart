@@ -42,11 +42,11 @@ class ApiClient {
 
       return device.copyWith(
         name: metadata.name,
-        host: metadata.host,
+        host: device.host,
         port: metadata.port,
         serviceType: metadata.serviceType,
         websocketPath: metadata.websocketPath,
-        wakeTarget: metadata.wakeTarget ?? device.wakeTarget,
+        wakeTarget: device.wakeTarget,
       );
     } finally {
       httpClient.close();

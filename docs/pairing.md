@@ -7,7 +7,7 @@ Pair the Android client with a desktop agent in one scan without manual IP entry
 ## Pairing Flow
 
 1. The agent generates a short-lived pairing token.
-2. The agent encodes host, port, token, device metadata, and wake-target metadata in an `openremote://pair` URI.
+2. The agent encodes host, port, token, device metadata, and wake-target metadata in an `openremote://pair` URI. When multiple interface addresses exist, the payload can also advertise per-network connection options.
 3. The Android client scans or receives that URI.
 4. The client calls `POST /api/v1/pairing/complete` with the pairing token and device name.
 5. The agent consumes the pairing token and returns a long-lived bearer token.
@@ -25,7 +25,20 @@ Pair the Android client with a desktop agent in one scan without manual IP entry
   "ws_path": "/ws",
   "wake_mac": "AA:BB:CC:DD:EE:FF",
   "wake_broadcast": "192.168.1.255",
-  "wake_port": 9
+  "wake_port": 9,
+  "networks": [
+    {
+      "name": "Wi-Fi",
+      "host": "192.168.1.50",
+      "wake_mac": "AA:BB:CC:DD:EE:FF",
+      "wake_broadcast": "192.168.1.255",
+      "wake_port": 9
+    },
+    {
+      "name": "Tailscale",
+      "host": "100.64.0.10"
+    }
+  ]
 }
 ```
 
@@ -42,4 +55,5 @@ openremote://pair?data=<base64url-json>
 - Access tokens are device-specific.
 - The agent records last-seen timestamps for paired devices.
 - Wake metadata is advisory and is used by the Android client to send WOL packets even while the agent itself is offline.
+- Per-network options let the Android client prefer a wake-capable LAN route or intentionally choose a remote-only route such as a VPN address.
 - Future revisions should add optional TLS and device-scoped permissions.

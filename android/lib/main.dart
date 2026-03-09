@@ -11,6 +11,7 @@ import 'core/models/pairing.dart';
 import 'core/models/remote_layout.dart';
 import 'core/networking/api_client.dart';
 import 'core/networking/discovery.dart';
+import 'core/networking/pairing_host_resolver.dart';
 import 'core/networking/wake_on_lan_client.dart';
 import 'core/networking/websocket_client.dart';
 import 'core/persistence/app_state_store.dart';
@@ -253,10 +254,18 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
     try {
       final pairing = PairingPayload.fromUri(rawUri);
-      final pairedDevice = await _apiClient.completePairing(
-        pairing,
-        'OpenRemote Android',
-      );
+      final selectedPairing = await _resolvePairingRoute(pairing);
+      if (selectedPairing == null) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _status = 'Pairing cancelled';
+        });
+        return;
+      }
+
+      final pairedDevice = await _completePairing(selectedPairing);
 
       if (!mounted) {
         return;
@@ -282,6 +291,94 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         SnackBar(content: Text('Pairing failed: $error')),
       );
     }
+  }
+
+  Future<PairingPayload?> _resolvePairingRoute(PairingPayload pairing) async {
+    final networkOptions = pairing.availableNetworks;
+    if (networkOptions.length <= 1 || !mounted) {
+      return pairing;
+    }
+
+    final choice = await showModalBottomSheet<_PairingRouteChoice>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Choose a network for ${pairing.deviceName}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Wake-capable LAN routes are listed separately from remote-only routes such as VPN addresses.',
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.auto_awesome),
+                  title: const Text('Auto select best route'),
+                  subtitle: const Text(
+                    'Try all advertised addresses. Use this if you just want the app to find a reachable path.',
+                  ),
+                  onTap: () => Navigator.of(context).pop(
+                    const _PairingRouteChoice.auto(),
+                  ),
+                ),
+                for (final PairingNetworkOption option in networkOptions)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      option.canWake ? Icons.wifi : Icons.vpn_key,
+                    ),
+                    title: Text(option.displayName),
+                    subtitle: Text(
+                      '${option.host} • ${option.canWake ? 'Wake-on-LAN available' : 'No Wake-on-LAN'}',
+                    ),
+                    onTap: () => Navigator.of(context).pop(
+                      _PairingRouteChoice.network(option),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (choice == null) {
+      return null;
+    }
+    if (choice.isAuto) {
+      return pairing;
+    }
+
+    return pairing.selectNetwork(choice.network!);
+  }
+
+  Future<Device> _completePairing(PairingPayload pairing) async {
+    Object? lastNetworkError;
+    final candidates = pairingHostCandidates(pairing, _devices);
+
+    for (final candidate in candidates) {
+      try {
+        return await _apiClient.completePairing(
+            candidate, 'OpenRemote Android');
+      } on SocketException catch (error) {
+        lastNetworkError = error;
+      }
+    }
+
+    if (lastNetworkError != null) {
+      throw lastNetworkError;
+    }
+
+    throw const SocketException('No reachable pairing host was found.');
   }
 
   Future<void> _toggleFavoriteDevice(Device device) async {
@@ -756,4 +853,14 @@ class _UploadPayload {
 
   final String fileName;
   final List<int> bytes;
+}
+
+class _PairingRouteChoice {
+  const _PairingRouteChoice.auto() : network = null;
+
+  const _PairingRouteChoice.network(this.network);
+
+  final PairingNetworkOption? network;
+
+  bool get isAuto => network == null;
 }
