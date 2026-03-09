@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 
 import '../models/agent_data.dart';
@@ -168,6 +169,7 @@ class ApiClient {
     Device device, {
     required String fileName,
     required List<int> bytes,
+    String? targetDirectory,
   }) async {
     final token = device.accessToken;
     if (token == null || token.isEmpty) {
@@ -191,6 +193,8 @@ class ApiClient {
           <String, dynamic>{
             'name': path.basename(fileName),
             'base64_data': base64Encode(bytes),
+            if (targetDirectory != null && targetDirectory.trim().isNotEmpty)
+              'target_dir': targetDirectory,
           },
         ),
       );
@@ -204,6 +208,43 @@ class ApiClient {
       }
 
       return jsonDecode(payload) as Map<String, dynamic>;
+    } finally {
+      httpClient.close();
+    }
+  }
+
+  Future<List<int>> downloadFile(
+    Device device, {
+    required String remotePath,
+  }) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('Device must be paired before downloading files.');
+    }
+
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.getUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: '/api/v1/filesystem/download',
+          queryParameters: <String, String>{'path': remotePath},
+        ),
+      );
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+
+      final response = await request.close();
+      final bytes = await consolidateHttpClientResponseBytes(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final payload = utf8.decode(bytes, allowMalformed: true);
+        throw HttpException(
+          'Download failed with status ${response.statusCode}: $payload',
+        );
+      }
+
+      return bytes;
     } finally {
       httpClient.close();
     }
@@ -249,6 +290,94 @@ class ApiClient {
     } finally {
       httpClient.close();
     }
+  }
+
+  Future<void> createFolder(
+    Device device, {
+    required String parentPath,
+    required String name,
+  }) async {
+    await _postFilesystemAction(
+      device,
+      path: '/api/v1/filesystem/folder',
+      payload: <String, dynamic>{
+        'parent_path': parentPath,
+        'name': name,
+      },
+      errorLabel: 'Create folder',
+    );
+  }
+
+  Future<void> renameEntry(
+    Device device, {
+    required String entryPath,
+    required String newName,
+  }) async {
+    await _postFilesystemAction(
+      device,
+      path: '/api/v1/filesystem/rename',
+      payload: <String, dynamic>{
+        'path': entryPath,
+        'new_name': newName,
+      },
+      errorLabel: 'Rename',
+    );
+  }
+
+  Future<void> deleteEntry(
+    Device device, {
+    required String entryPath,
+  }) async {
+    await _postFilesystemAction(
+      device,
+      path: '/api/v1/filesystem/delete',
+      payload: <String, dynamic>{'path': entryPath},
+      errorLabel: 'Delete',
+    );
+  }
+
+  Future<void> moveEntry(
+    Device device, {
+    required String sourcePath,
+    required String destinationPath,
+  }) async {
+    await _postFilesystemAction(
+      device,
+      path: '/api/v1/filesystem/move',
+      payload: <String, dynamic>{
+        'source_path': sourcePath,
+        'destination_path': destinationPath,
+      },
+      errorLabel: 'Move',
+    );
+  }
+
+  Future<void> copyEntry(
+    Device device, {
+    required String sourcePath,
+    required String destinationPath,
+  }) async {
+    await _postFilesystemAction(
+      device,
+      path: '/api/v1/filesystem/copy',
+      payload: <String, dynamic>{
+        'source_path': sourcePath,
+        'destination_path': destinationPath,
+      },
+      errorLabel: 'Copy',
+    );
+  }
+
+  Future<void> openRemotePath(
+    Device device, {
+    required String entryPath,
+  }) async {
+    await _postFilesystemAction(
+      device,
+      path: '/api/v1/filesystem/open',
+      payload: <String, dynamic>{'path': entryPath},
+      errorLabel: 'Open path',
+    );
   }
 
   Future<List<AgentProcess>> fetchProcesses(Device device) async {
@@ -314,6 +443,43 @@ class ApiClient {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
           'Terminate process failed with status ${response.statusCode}: $payload',
+        );
+      }
+    } finally {
+      httpClient.close();
+    }
+  }
+
+  Future<void> _postFilesystemAction(
+    Device device, {
+    required String path,
+    required Map<String, dynamic> payload,
+    required String errorLabel,
+  }) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('Device must be paired before file actions.');
+    }
+
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.postUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: path,
+        ),
+      );
+      request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.write(jsonEncode(payload));
+
+      final response = await request.close();
+      final responsePayload = await utf8.decoder.bind(response).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          '$errorLabel failed with status ${response.statusCode}: $responsePayload',
         );
       }
     } finally {

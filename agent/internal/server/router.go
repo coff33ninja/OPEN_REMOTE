@@ -97,6 +97,13 @@ func (a *Application) routes() http.Handler {
 	mux.HandleFunc("/api/v1/remotes/catalog", a.handleRemotes)
 	mux.HandleFunc("/api/v1/remotes/", a.handleRemoteDocument)
 	mux.HandleFunc("/api/v1/filesystem", a.handleFilesystem)
+	mux.HandleFunc("/api/v1/filesystem/download", a.handleFileDownload)
+	mux.HandleFunc("/api/v1/filesystem/open", a.handleFilesystemOpen)
+	mux.HandleFunc("/api/v1/filesystem/folder", a.handleCreateFolder)
+	mux.HandleFunc("/api/v1/filesystem/rename", a.handleRenameEntry)
+	mux.HandleFunc("/api/v1/filesystem/delete", a.handleDeleteEntry)
+	mux.HandleFunc("/api/v1/filesystem/move", a.handleMoveEntry)
+	mux.HandleFunc("/api/v1/filesystem/copy", a.handleCopyEntry)
 	mux.HandleFunc("/api/v1/pairing/session", a.handlePairingSession)
 	mux.HandleFunc("/api/v1/pairing/qr.png", a.handlePairingQRCode)
 	mux.HandleFunc("/api/v1/pairing/complete", a.handlePairingComplete)
@@ -547,6 +554,289 @@ func (a *Application) handleFilesystem(writer http.ResponseWriter, request *http
 	})
 }
 
+func (a *Application) handleFileDownload(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	target := request.URL.Query().Get("path")
+	blob, entry, err := a.executor.ReadFile(target)
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	contentType := http.DetectContentType(blob)
+	if contentType == "application/octet-stream" {
+		contentType = "application/octet-stream"
+	}
+
+	writer.Header().Set("Content-Type", contentType)
+	writer.Header().Set(
+		"Content-Disposition",
+		fmt.Sprintf("attachment; filename=%q", entry.Name),
+	)
+	writer.Header().Set("Content-Length", strconv.Itoa(len(blob)))
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(blob)
+}
+
+func (a *Application) handleFilesystemOpen(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid open payload",
+		})
+		return
+	}
+	if strings.TrimSpace(input.Path) == "" {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "path is required",
+		})
+		return
+	}
+
+	if err := a.executor.OpenPath(input.Path); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusAccepted, map[string]any{
+		"status": "accepted",
+		"path":   filepath.Clean(input.Path),
+	})
+}
+
+func (a *Application) handleCreateFolder(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		ParentPath string `json:"parent_path"`
+		Name       string `json:"name"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid folder payload",
+		})
+		return
+	}
+
+	entry, err := a.executor.CreateDirectory(input.ParentPath, input.Name)
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusCreated, map[string]any{
+		"entry": entry,
+	})
+}
+
+func (a *Application) handleRenameEntry(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		Path    string `json:"path"`
+		NewName string `json:"new_name"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid rename payload",
+		})
+		return
+	}
+
+	entry, err := a.executor.RenameEntry(input.Path, input.NewName)
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"entry": entry,
+	})
+}
+
+func (a *Application) handleDeleteEntry(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid delete payload",
+		})
+		return
+	}
+	if strings.TrimSpace(input.Path) == "" {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "path is required",
+		})
+		return
+	}
+
+	if err := a.executor.DeleteEntry(input.Path); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"status": "deleted",
+		"path":   filepath.Clean(input.Path),
+	})
+}
+
+func (a *Application) handleMoveEntry(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		SourcePath      string `json:"source_path"`
+		DestinationPath string `json:"destination_path"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid move payload",
+		})
+		return
+	}
+
+	entry, err := a.executor.MoveEntry(input.SourcePath, input.DestinationPath)
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"entry": entry,
+	})
+}
+
+func (a *Application) handleCopyEntry(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		SourcePath      string `json:"source_path"`
+		DestinationPath string `json:"destination_path"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid copy payload",
+		})
+		return
+	}
+
+	entry, err := a.executor.CopyEntry(input.SourcePath, input.DestinationPath)
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusCreated, map[string]any{
+		"entry": entry,
+	})
+}
+
 func (a *Application) handleFilesList(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
@@ -612,6 +902,7 @@ func (a *Application) handleFileUpload(writer http.ResponseWriter, request *http
 	var input struct {
 		Name       string `json:"name"`
 		Base64Data string `json:"base64_data"`
+		TargetDir  string `json:"target_dir"`
 	}
 	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
 		writeJSON(writer, http.StatusBadRequest, map[string]any{
@@ -633,7 +924,12 @@ func (a *Application) handleFileUpload(writer http.ResponseWriter, request *http
 		})
 		return
 	}
-	if err := os.MkdirAll(a.config.UploadsDir, 0o755); err != nil {
+	uploadRoot := a.config.UploadsDir
+	if strings.TrimSpace(input.TargetDir) != "" {
+		uploadRoot = filepath.Clean(input.TargetDir)
+	}
+
+	if err := os.MkdirAll(uploadRoot, 0o755); err != nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]any{
 			"error": err.Error(),
 		})
@@ -648,7 +944,7 @@ func (a *Application) handleFileUpload(writer http.ResponseWriter, request *http
 		return
 	}
 
-	targetPath := uniqueUploadPath(a.config.UploadsDir, safeName)
+	targetPath := uniqueUploadPath(uploadRoot, safeName)
 	if err := os.WriteFile(targetPath, blob, 0o644); err != nil {
 		writeJSON(writer, http.StatusInternalServerError, map[string]any{
 			"error": err.Error(),
