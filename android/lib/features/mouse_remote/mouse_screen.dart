@@ -118,6 +118,10 @@ class _MouseScreenState extends State<MouseScreen> {
                 action: 'click',
                 arguments: const <String, dynamic>{'button': 'left'},
               ),
+              onSecondaryTap: () => _sendMouse(
+                action: 'click',
+                arguments: const <String, dynamic>{'button': 'right'},
+              ),
               onDoubleTap: () => _sendMouse(
                 action: 'double_click',
                 arguments: const <String, dynamic>{'button': 'left'},

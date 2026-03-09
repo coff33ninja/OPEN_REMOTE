@@ -611,6 +611,15 @@ class _TouchpadControl extends StatelessWidget {
           defaultProps: const <String, dynamic>{'button': 'left'},
         ),
       ),
+      onSecondaryTap: () => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'secondary_tap_command',
+          fallbackCommand: 'mouse_click',
+          defaultProps: const <String, dynamic>{'button': 'right'},
+        ),
+      ),
       onDoubleTap: () => onSend(
         _touchpadCommand(
           remoteId,

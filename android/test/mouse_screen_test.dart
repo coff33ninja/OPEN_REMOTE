@@ -44,6 +44,39 @@ void main() {
     expect(sent.last.commandName, 'mouse_button_up');
   });
 
+  testWidgets('MouseScreen maps two-finger tap to right click',
+      (WidgetTester tester) async {
+    final sent = <CommandEnvelope>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MouseScreen(
+            enabled: true,
+            onSend: (CommandEnvelope command) async {
+              sent.add(command);
+            },
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('Touchpad'));
+    final firstFinger = await tester.createGesture();
+    final secondFinger = await tester.createGesture(pointer: 2);
+
+    await firstFinger.down(target.translate(-14, 0));
+    await secondFinger.down(target.translate(14, 0));
+    await tester.pump(const Duration(milliseconds: 40));
+    await firstFinger.up();
+    await secondFinger.up();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(sent, hasLength(1));
+    expect(sent.first.commandName, 'mouse_click');
+    expect(sent.first.arguments['button'], 'right');
+  });
+
   testWidgets('MouseScreen scroll rail sends wheel commands',
       (WidgetTester tester) async {
     final sent = <CommandEnvelope>[];
