@@ -18,18 +18,41 @@ class AppTheme {
     );
 
     return ThemeData(
+      useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: canvas,
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         backgroundColor: canvas,
         foregroundColor: ink,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: canvas,
+        surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

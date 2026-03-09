@@ -17,6 +17,7 @@ import 'core/networking/websocket_client.dart';
 import 'core/persistence/app_state_store.dart';
 import 'features/custom_remotes/remote_loader.dart';
 import 'features/custom_remotes/remote_renderer.dart';
+import 'features/discovery/device_manager_screen.dart';
 import 'features/discovery/device_list.dart';
 import 'features/file_transfer/file_transfer_screen.dart';
 import 'features/file_explorer/file_explorer_screen.dart';
@@ -29,6 +30,24 @@ import 'ui/themes/app_theme.dart';
 
 void main() {
   runApp(const OpenRemoteApp());
+}
+
+enum _AppSection {
+  dashboard('Dashboard', Icons.space_dashboard_outlined),
+  devices('Devices', Icons.devices_outlined),
+  mouse('Mouse', Icons.mouse_outlined),
+  keyboard('Keyboard', Icons.keyboard_outlined),
+  media('Media', Icons.perm_media_outlined),
+  explorer('Explorer', Icons.folder_open_outlined),
+  tasks('Tasks', Icons.checklist_outlined),
+  files('Files', Icons.upload_file_outlined),
+  custom('Custom Remotes', Icons.tune_outlined),
+  designer('Designer', Icons.draw_outlined);
+
+  const _AppSection(this.title, this.icon);
+
+  final String title;
+  final IconData icon;
 }
 
 class OpenRemoteApp extends StatelessWidget {
@@ -74,6 +93,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   bool _loading = true;
   bool _uploadingSharedFiles = false;
   String _status = 'Ready';
+  _AppSection _currentSection = _AppSection.dashboard;
 
   @override
   void initState() {
@@ -390,6 +410,94 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       }
     });
     await _persistState();
+  }
+
+  Future<void> _refreshDevices() async {
+    setState(() {
+      _status = 'Refreshing discovery';
+    });
+
+    try {
+      final discoveredDevices = await _discoveryService.discover();
+      final pairedDevices = _devices.where((Device device) {
+        final token = device.accessToken;
+        return token != null && token.isNotEmpty;
+      }).toList();
+      final mergedDevices = _mergeDevices(pairedDevices, discoveredDevices);
+      final selectedDeviceId = _selectedDevice?.id;
+      final refreshedSelection = selectedDeviceId == null
+          ? null
+          : mergedDevices.where((Device device) {
+              return device.id == selectedDeviceId;
+            }).firstOrNull;
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _devices = mergedDevices;
+        _selectedDevice = refreshedSelection;
+        _status = mergedDevices.isEmpty
+            ? 'No agents found'
+            : 'Found ${mergedDevices.length} agent(s)';
+      });
+
+      await _persistState();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _status = 'Refresh failed';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Discovery refresh failed: $error')),
+      );
+    }
+  }
+
+  Future<void> _deleteDevice(Device device) async {
+    final deletingSelectedDevice = _selectedDevice?.id == device.id;
+    if (deletingSelectedDevice) {
+      await _client.dispose();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _devices = _devices
+          .where((Device existing) => existing.id != device.id)
+          .toList();
+      _favoriteDeviceIds = <String>{..._favoriteDeviceIds}..remove(device.id);
+      _recentDeviceIds = _recentDeviceIds
+          .where((String existing) => existing != device.id)
+          .toList();
+      if (deletingSelectedDevice) {
+        _selectedDevice = null;
+      }
+      _status = 'Removed ${device.name}';
+    });
+
+    await _persistState();
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          deletingSelectedDevice
+              ? 'Removed ${device.name} and cleared the active session.'
+              : 'Removed ${device.name}.',
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleFavoriteRemote(RemoteLayout remote) async {
@@ -751,96 +859,310 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     super.dispose();
   }
 
+  void _setSection(_AppSection section) {
+    if (_currentSection == section) {
+      return;
+    }
+    setState(() {
+      _currentSection = section;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final deviceLabel = _selectedDevice?.name ?? 'No agent selected';
     final orderedDevices = _orderedDevices();
     final orderedRemotes = _orderedRemotes();
 
-    return DefaultTabController(
-      length: 9,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('OpenRemote - $deviceLabel'),
-          bottom: const TabBar(
-            isScrollable: true,
-            tabs: <Widget>[
-              Tab(text: 'Discover'),
-              Tab(text: 'Mouse'),
-              Tab(text: 'Keyboard'),
-              Tab(text: 'Media'),
-              Tab(text: 'Explorer'),
-              Tab(text: 'Tasks'),
-              Tab(text: 'Files'),
-              Tab(text: 'Custom'),
-              Tab(text: 'Designer'),
-            ],
-          ),
-        ),
-        body: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
-                children: <Widget>[
-                  DeviceListScreen(
-                    devices: orderedDevices,
-                    selectedDevice: _selectedDevice,
-                    favoriteDeviceIds: _favoriteDeviceIds,
-                    recentDeviceIds: _recentDeviceIds,
-                    statusMessage: _status,
-                    onConnect: _connectToDevice,
-                    onWake: _wakeDevice,
-                    onPairUriSubmit: _pairWithUri,
-                    onToggleFavoriteDevice: _toggleFavoriteDevice,
-                  ),
-                  MouseScreen(
-                    enabled: _client.isConnected,
-                    onSend: _send,
-                  ),
-                  KeyboardScreen(
-                    enabled: _client.isConnected,
-                    onSend: _send,
-                  ),
-                  MediaScreen(
-                    enabled: _client.isConnected,
-                    onSend: _send,
-                  ),
-                  FileExplorerScreen(
-                    enabled: _client.isConnected && _selectedDevice != null,
-                    device: _selectedDevice,
-                    apiClient: _apiClient,
-                  ),
-                  TaskManagerScreen(
-                    enabled: _client.isConnected && _selectedDevice != null,
-                    device: _selectedDevice,
-                    apiClient: _apiClient,
-                  ),
-                  FileTransferScreen(
-                    enabled: _client.isConnected && _selectedDevice != null,
-                    device: _selectedDevice,
-                    apiClient: _apiClient,
-                    pendingSharedCount: _pendingSharedFiles.length,
-                    onUploadPendingShares: _flushPendingShares,
-                  ),
-                  CustomRemoteScreen(
-                    enabled: _selectedDevice != null,
-                    remotes: orderedRemotes,
-                    favoriteRemoteIds: _favoriteRemoteIds,
-                    onSend: _send,
-                    onToggleFavoriteRemote: _toggleFavoriteRemote,
-                  ),
-                  RemoteDesignerScreen(
-                    designedRemotes: List<RemoteLayout>.from(
-                      _designedRemoteLayouts,
-                    )..sort(
-                        (RemoteLayout left, RemoteLayout right) =>
-                            left.name.compareTo(right.name),
-                      ),
-                    onSaveRemote: _saveDesignedRemote,
-                    onDeleteRemote: _deleteDesignedRemote,
-                  ),
-                ],
-              ),
+    final sections = <Widget>[
+      DeviceListScreen(
+        devices: orderedDevices,
+        selectedDevice: _selectedDevice,
+        favoriteDeviceIds: _favoriteDeviceIds,
+        recentDeviceIds: _recentDeviceIds,
+        statusMessage: _status,
+        isConnected: _client.isConnected,
+        pendingSharedCount: _pendingSharedFiles.length,
+        onConnect: _connectToDevice,
+        onWake: _wakeDevice,
+        onPairUriSubmit: _pairWithUri,
+        onToggleFavoriteDevice: _toggleFavoriteDevice,
+        onRefreshDevices: _refreshDevices,
+        onOpenDeviceManager: () => _setSection(_AppSection.devices),
       ),
+      DeviceManagerScreen(
+        devices: orderedDevices,
+        selectedDevice: _selectedDevice,
+        favoriteDeviceIds: _favoriteDeviceIds,
+        recentDeviceIds: _recentDeviceIds,
+        statusMessage: _status,
+        onConnect: _connectToDevice,
+        onWake: _wakeDevice,
+        onPairUriSubmit: _pairWithUri,
+        onToggleFavoriteDevice: _toggleFavoriteDevice,
+        onDeleteDevice: _deleteDevice,
+        onRefreshDevices: _refreshDevices,
+      ),
+      MouseScreen(
+        enabled: _client.isConnected,
+        onSend: _send,
+      ),
+      KeyboardScreen(
+        enabled: _client.isConnected,
+        onSend: _send,
+      ),
+      MediaScreen(
+        enabled: _client.isConnected,
+        onSend: _send,
+      ),
+      FileExplorerScreen(
+        enabled: _client.isConnected && _selectedDevice != null,
+        device: _selectedDevice,
+        apiClient: _apiClient,
+      ),
+      TaskManagerScreen(
+        enabled: _client.isConnected && _selectedDevice != null,
+        device: _selectedDevice,
+        apiClient: _apiClient,
+      ),
+      FileTransferScreen(
+        enabled: _client.isConnected && _selectedDevice != null,
+        device: _selectedDevice,
+        apiClient: _apiClient,
+        pendingSharedCount: _pendingSharedFiles.length,
+        onUploadPendingShares: _flushPendingShares,
+      ),
+      CustomRemoteScreen(
+        enabled: _selectedDevice != null,
+        remotes: orderedRemotes,
+        favoriteRemoteIds: _favoriteRemoteIds,
+        onSend: _send,
+        onToggleFavoriteRemote: _toggleFavoriteRemote,
+      ),
+      RemoteDesignerScreen(
+        designedRemotes: List<RemoteLayout>.from(
+          _designedRemoteLayouts,
+        )..sort(
+            (RemoteLayout left, RemoteLayout right) =>
+                left.name.compareTo(right.name),
+          ),
+        onSaveRemote: _saveDesignedRemote,
+        onDeleteRemote: _deleteDesignedRemote,
+      ),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(_currentSection.title),
+            Text(
+              deviceLabel,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF6F6559),
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ],
+        ),
+        actions: _loading
+            ? null
+            : <Widget>[
+                IconButton(
+                  onPressed: _refreshDevices,
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh discovery',
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Center(
+                    child: _ShellStatusPill(
+                      label: _client.isConnected ? 'Connected' : 'Offline',
+                      icon: _client.isConnected ? Icons.wifi : Icons.wifi_off,
+                    ),
+                  ),
+                ),
+              ],
+      ),
+      drawer: _loading
+          ? null
+          : Drawer(
+              child: SafeArea(
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: Container(
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[
+                                Color(0xFF8A3B12),
+                                Color(0xFFB45309),
+                                Color(0xFFE29A19),
+                              ],
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                'OpenRemote',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                deviceLabel,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _status,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: const Color(0xFFFDF2E6),
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                        children: <Widget>[
+                          const _DrawerSectionLabel('Workspace'),
+                          _DrawerItem(
+                            section: _AppSection.dashboard,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.dashboard);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.devices,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.devices);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          const _DrawerSectionLabel('Controls'),
+                          _DrawerItem(
+                            section: _AppSection.mouse,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.mouse);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.keyboard,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.keyboard);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.media,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.media);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.custom,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.custom);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          const _DrawerSectionLabel('Tools'),
+                          _DrawerItem(
+                            section: _AppSection.explorer,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.explorer);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.tasks,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.tasks);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.files,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.files);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.designer,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.designer);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Use Device Manager to curate LAN and VPN pairings, remove stale desktops, and choose what stays on this phone.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : IndexedStack(
+              index: _AppSection.values.indexOf(_currentSection),
+              children: sections,
+            ),
     );
   }
 }
@@ -863,4 +1185,88 @@ class _PairingRouteChoice {
   final PairingNetworkOption? network;
 
   bool get isAuto => network == null;
+}
+
+class _ShellStatusPill extends StatelessWidget {
+  const _ShellStatusPill({
+    required this.label,
+    required this.icon,
+  });
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0ECE4),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerSectionLabel extends StatelessWidget {
+  const _DrawerSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: const Color(0xFF6F6559),
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  const _DrawerItem({
+    required this.section,
+    required this.currentSection,
+    required this.onTap,
+  });
+
+  final _AppSection section;
+  final _AppSection currentSection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = section == currentSection;
+
+    return ListTile(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      selected: isSelected,
+      selectedTileColor: const Color(0xFFF2E4D0),
+      leading: Icon(section.icon),
+      title: Text(section.title),
+      onTap: onTap,
+    );
+  }
 }
