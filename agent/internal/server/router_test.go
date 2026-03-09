@@ -95,6 +95,9 @@ func TestPairingPageRendersHTML(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "Pair Test Agent") {
 		t.Fatalf("body = %s, want pairing heading", response.Body.String())
 	}
+	if !strings.Contains(response.Body.String(), "Device Manager") {
+		t.Fatalf("body = %s, want updated pairing instructions", response.Body.String())
+	}
 	if !strings.Contains(response.Header().Get("Content-Type"), "text/html") {
 		t.Fatalf("content-type = %s, want text/html", response.Header().Get("Content-Type"))
 	}

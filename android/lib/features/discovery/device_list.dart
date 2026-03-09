@@ -457,6 +457,17 @@ class _SelectedDeviceCard extends StatelessWidget {
                       ),
                 ),
               ),
+            if (device.hasRouteIssue)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Last route failure: ${device.lastFailureMessage ?? device.lastFailedRouteHost ?? 'unknown error'}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -469,7 +480,7 @@ class _SelectedDeviceCard extends StatelessWidget {
                   ),
                   label: Text(isConnected ? 'Reconnect' : 'Connect'),
                 ),
-                if (device.canWake)
+                if (device.hasWakeRoute)
                   OutlinedButton.icon(
                     onPressed: () => onWake(device),
                     icon: const Icon(Icons.power_settings_new),
@@ -571,6 +582,17 @@ class _QuickDeviceCard extends StatelessWidget {
                       ),
                 ),
               ),
+            if (device.hasRouteIssue)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Last route failure: ${device.lastFailureMessage ?? device.lastFailedRouteHost ?? 'unknown error'}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -583,7 +605,7 @@ class _QuickDeviceCard extends StatelessWidget {
                     selectedDevice?.id == device.id ? 'Reconnect' : 'Connect',
                   ),
                 ),
-                if (device.canWake)
+                if (device.hasWakeRoute)
                   OutlinedButton.icon(
                     onPressed: () => onWake(device),
                     icon: const Icon(Icons.power_settings_new),
@@ -650,6 +672,14 @@ List<Widget> _deviceBadges({
         backgroundColor: Color(0xFFEDE2FA),
         icon: Icons.route,
       ),
+    if (device.routePolicy != DeviceRoutePolicy.inherit)
+      _DeviceBadgeChip(
+        label: deviceRoutePolicyLabel(device.routePolicy),
+        backgroundColor: const Color(0xFFE7EEF7),
+        icon: device.routePolicy == DeviceRoutePolicy.localFirst
+            ? Icons.wifi
+            : Icons.route,
+      ),
     if (recentDeviceIds.contains(device.id))
       const _DeviceBadgeChip(
         label: 'Recent',
@@ -667,6 +697,12 @@ List<Widget> _deviceBadges({
         label: 'Wake-ready',
         backgroundColor: Color(0xFFF7E0D6),
         icon: Icons.power_settings_new,
+      ),
+    if (device.hasRouteIssue)
+      const _DeviceBadgeChip(
+        label: 'Route issue',
+        backgroundColor: Color(0xFFF8D7D7),
+        icon: Icons.error_outline,
       ),
   ];
 

@@ -20,6 +20,7 @@ class DeviceManagerScreen extends StatefulWidget {
     required this.onDeleteDevice,
     required this.onRefreshDevices,
     required this.onSetPreferredRoute,
+    required this.onSetRoutePolicy,
     required this.onPreferLocalRoutesChanged,
   });
 
@@ -37,6 +38,7 @@ class DeviceManagerScreen extends StatefulWidget {
   final Future<void> Function() onRefreshDevices;
   final Future<void> Function(Device device, NetworkRoute route)
       onSetPreferredRoute;
+  final Future<void> Function(Device device, String policy) onSetRoutePolicy;
   final Future<void> Function(bool value) onPreferLocalRoutesChanged;
 
   @override
@@ -107,6 +109,10 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                 Navigator.of(context).pop();
                 await widget.onSetPreferredRoute(device, route);
               },
+              onSetRoutePolicy: (String policy) async {
+                Navigator.of(context).pop();
+                await widget.onSetRoutePolicy(device, policy);
+              },
             ),
           ),
         );
@@ -154,9 +160,9 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: widget.preferLocalRoutes,
-                  title: const Text('Prefer local LAN when available'),
+                  title: const Text('Default to local LAN when available'),
                   subtitle: const Text(
-                    'When enabled, Wi-Fi and Ethernet routes are tried before VPN and remote-only paths.',
+                    'Devices can override this in their details. When enabled, Wi-Fi and Ethernet routes are tried before VPN and remote-only paths.',
                   ),
                   onChanged: widget.onPreferLocalRoutesChanged,
                 ),
@@ -295,8 +301,17 @@ class _ManagedDeviceCard extends StatelessWidget {
         ),
       if ((device.preferredRouteHost ?? '').trim().isNotEmpty)
         const _DeviceBadge(label: 'Preferred route', icon: Icons.route),
+      if (device.routePolicy != DeviceRoutePolicy.inherit)
+        _DeviceBadge(
+          label: deviceRoutePolicyLabel(device.routePolicy),
+          icon: device.routePolicy == DeviceRoutePolicy.localFirst
+              ? Icons.wifi
+              : Icons.route,
+        ),
       if (device.hasWakeRoute)
         const _DeviceBadge(label: 'Wake-ready', icon: Icons.power_settings_new),
+      if (device.hasRouteIssue)
+        const _DeviceBadge(label: 'Route issue', icon: Icons.error_outline),
       if ((device.accessToken ?? '').isEmpty)
         const _DeviceBadge(label: 'Discovery only', icon: Icons.travel_explore),
     ];
@@ -363,6 +378,17 @@ class _ManagedDeviceCard extends StatelessWidget {
                       ),
                 ),
               ),
+            if (device.hasRouteIssue)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Last route failure: ${device.lastFailureMessage ?? device.lastFailedRouteHost ?? 'unknown error'}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 12,
@@ -375,7 +401,7 @@ class _ManagedDeviceCard extends StatelessWidget {
                     selectedDevice?.id == device.id ? 'Reconnect' : 'Connect',
                   ),
                 ),
-                if (device.canWake)
+                if (device.hasWakeRoute)
                   OutlinedButton.icon(
                     onPressed: () => onWake(device),
                     icon: const Icon(Icons.power_settings_new),
@@ -399,10 +425,12 @@ class _DeviceDetailsSheet extends StatelessWidget {
   const _DeviceDetailsSheet({
     required this.device,
     required this.onSetPreferredRoute,
+    required this.onSetRoutePolicy,
   });
 
   final Device device;
   final Future<void> Function(NetworkRoute route) onSetPreferredRoute;
+  final Future<void> Function(String policy) onSetRoutePolicy;
 
   @override
   Widget build(BuildContext context) {
@@ -447,6 +475,63 @@ class _DeviceDetailsSheet extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
           ),
+        if ((device.lastFailedRouteHost ?? '').trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: 12),
+          Text(
+            'Last failed route: ${device.lastFailedRouteHost}',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF8A3B12),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          if ((device.lastFailureMessage ?? '').trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                device.lastFailureMessage!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF8A3B12),
+                    ),
+              ),
+            ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          'Route policy',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: const <ButtonSegment<String>>[
+            ButtonSegment<String>(
+              value: DeviceRoutePolicy.inherit,
+              label: Text('Default'),
+              icon: Icon(Icons.auto_awesome),
+            ),
+            ButtonSegment<String>(
+              value: DeviceRoutePolicy.localFirst,
+              label: Text('Local'),
+              icon: Icon(Icons.wifi),
+            ),
+            ButtonSegment<String>(
+              value: DeviceRoutePolicy.rememberedFirst,
+              label: Text('Remembered'),
+              icon: Icon(Icons.route),
+            ),
+          ],
+          selected: <String>{device.routePolicy},
+          onSelectionChanged: (Set<String> selection) {
+            if (selection.isEmpty) {
+              return;
+            }
+            onSetRoutePolicy(selection.first);
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Default uses the global app preference. Local favors Wi-Fi and Ethernet. Remembered favors the preferred or last-working route first.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         const SizedBox(height: 16),
         Text(
           'Advertised routes',

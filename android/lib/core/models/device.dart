@@ -54,6 +54,12 @@ class NetworkTransportKind {
   static const String unknown = 'unknown';
 }
 
+class DeviceRoutePolicy {
+  static const String inherit = 'inherit';
+  static const String localFirst = 'local_first';
+  static const String rememberedFirst = 'remembered_first';
+}
+
 class NetworkRoute {
   const NetworkRoute({
     required this.host,
@@ -161,10 +167,14 @@ class Device {
     this.websocketPath = '/ws',
     this.wakeTarget,
     this.networkRoutes = const <NetworkRoute>[],
+    this.routePolicy = DeviceRoutePolicy.inherit,
     this.preferredRouteHost,
     this.lastSuccessfulRouteHost,
+    this.lastFailedRouteHost,
     this.lastSeenAt,
     this.lastConnectedAt,
+    this.lastFailedAt,
+    this.lastFailureMessage,
   });
 
   final String id;
@@ -176,16 +186,34 @@ class Device {
   final String websocketPath;
   final WakeTarget? wakeTarget;
   final List<NetworkRoute> networkRoutes;
+  final String routePolicy;
   final String? preferredRouteHost;
   final String? lastSuccessfulRouteHost;
+  final String? lastFailedRouteHost;
   final DateTime? lastSeenAt;
   final DateTime? lastConnectedAt;
+  final DateTime? lastFailedAt;
+  final String? lastFailureMessage;
 
   bool get canWake =>
       currentRoute?.canWake == true || wakeTarget?.isConfigured == true;
 
   bool get hasWakeRoute =>
       canWake || networkRoutes.any((NetworkRoute route) => route.canWake);
+
+  bool get hasRouteIssue {
+    final failureTime = lastFailedAt;
+    if (failureTime == null) {
+      return false;
+    }
+
+    final successTime = lastConnectedAt;
+    if (successTime == null) {
+      return true;
+    }
+
+    return failureTime.isAfter(successTime);
+  }
 
   Uri get websocketUrl => Uri(
         scheme: 'ws',
@@ -247,10 +275,14 @@ class Device {
       websocketPath: json['websocket_path'] as String? ?? '/ws',
       wakeTarget: wakeTarget?.isConfigured == true ? wakeTarget : null,
       networkRoutes: routes,
+      routePolicy: json['route_policy'] as String? ?? DeviceRoutePolicy.inherit,
       preferredRouteHost: json['preferred_route_host'] as String?,
       lastSuccessfulRouteHost: json['last_successful_route_host'] as String?,
+      lastFailedRouteHost: json['last_failed_route_host'] as String?,
       lastSeenAt: _parseTimestamp(json['last_seen_at']),
       lastConnectedAt: _parseTimestamp(json['last_connected_at']),
+      lastFailedAt: _parseTimestamp(json['last_failed_at']),
+      lastFailureMessage: json['last_failure_message'] as String?,
     );
   }
 
@@ -267,10 +299,14 @@ class Device {
       'networks': networkRoutes
           .map((NetworkRoute route) => route.toJson())
           .toList(growable: false),
+      'route_policy': routePolicy,
       'preferred_route_host': preferredRouteHost,
       'last_successful_route_host': lastSuccessfulRouteHost,
+      'last_failed_route_host': lastFailedRouteHost,
       'last_seen_at': lastSeenAt?.toUtc().toIso8601String(),
       'last_connected_at': lastConnectedAt?.toUtc().toIso8601String(),
+      'last_failed_at': lastFailedAt?.toUtc().toIso8601String(),
+      'last_failure_message': lastFailureMessage,
     }..removeWhere((String key, dynamic value) => value == null);
   }
 
@@ -284,14 +320,21 @@ class Device {
     String? websocketPath,
     WakeTarget? wakeTarget,
     List<NetworkRoute>? networkRoutes,
+    String? routePolicy,
     String? preferredRouteHost,
     bool clearPreferredRouteHost = false,
     String? lastSuccessfulRouteHost,
     bool clearLastSuccessfulRouteHost = false,
+    String? lastFailedRouteHost,
+    bool clearLastFailedRouteHost = false,
     DateTime? lastSeenAt,
     bool clearLastSeenAt = false,
     DateTime? lastConnectedAt,
     bool clearLastConnectedAt = false,
+    DateTime? lastFailedAt,
+    bool clearLastFailedAt = false,
+    String? lastFailureMessage,
+    bool clearLastFailureMessage = false,
   }) {
     return Device(
       id: id ?? this.id,
@@ -303,15 +346,24 @@ class Device {
       websocketPath: websocketPath ?? this.websocketPath,
       wakeTarget: wakeTarget ?? this.wakeTarget,
       networkRoutes: networkRoutes ?? this.networkRoutes,
+      routePolicy: routePolicy ?? this.routePolicy,
       preferredRouteHost: clearPreferredRouteHost
           ? null
           : preferredRouteHost ?? this.preferredRouteHost,
       lastSuccessfulRouteHost: clearLastSuccessfulRouteHost
           ? null
           : lastSuccessfulRouteHost ?? this.lastSuccessfulRouteHost,
+      lastFailedRouteHost: clearLastFailedRouteHost
+          ? null
+          : lastFailedRouteHost ?? this.lastFailedRouteHost,
       lastSeenAt: clearLastSeenAt ? null : lastSeenAt ?? this.lastSeenAt,
       lastConnectedAt:
           clearLastConnectedAt ? null : lastConnectedAt ?? this.lastConnectedAt,
+      lastFailedAt:
+          clearLastFailedAt ? null : lastFailedAt ?? this.lastFailedAt,
+      lastFailureMessage: clearLastFailureMessage
+          ? null
+          : lastFailureMessage ?? this.lastFailureMessage,
     );
   }
 }
@@ -412,6 +464,17 @@ String inferNetworkKindFromHost(String host) {
     return NetworkTransportKind.vpn;
   }
   return NetworkTransportKind.unknown;
+}
+
+String deviceRoutePolicyLabel(String policy) {
+  switch (policy) {
+    case DeviceRoutePolicy.localFirst:
+      return 'Prefer local';
+    case DeviceRoutePolicy.rememberedFirst:
+      return 'Prefer remembered';
+    default:
+      return 'Use default';
+  }
 }
 
 List<NetworkRoute> mergeNetworkRoutes(

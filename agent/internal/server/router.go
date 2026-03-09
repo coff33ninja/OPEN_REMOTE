@@ -370,8 +370,9 @@ func (a *Application) handlePairingPage(writer http.ResponseWriter, request *htt
           </div>
           <ol>
             <li>Open the Android app.</li>
-            <li>Tap <strong>Scan QR Code</strong> on the discovery tab.</li>
-            <li>Scan this pairing code to trust and connect.</li>
+            <li>Open the menu, then go to <strong>Device Manager</strong>.</li>
+            <li>Tap <strong>Scan and pair</strong> or paste the pairing URI manually.</li>
+            <li>Scan this pairing code to trust the desktop and connect.</li>
           </ol>
         </div>
       </div>

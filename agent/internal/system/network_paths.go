@@ -28,6 +28,11 @@ func LocalNetworkPaths(preferredHost string, explicit WakeTarget) ([]NetworkPath
 		return nil, err
 	}
 
+	adapterMetadataByIndex, err := loadAdapterMetadata()
+	if err != nil {
+		adapterMetadataByIndex = map[int]adapterMetadata{}
+	}
+
 	paths := make([]NetworkPath, 0, len(interfaces))
 	seenHosts := make(map[string]struct{}, len(interfaces))
 	for _, iface := range interfaces {
@@ -58,10 +63,11 @@ func LocalNetworkPaths(preferredHost string, explicit WakeTarget) ([]NetworkPath
 			}
 			seenHosts[dedupeKey] = struct{}{}
 
-			kind, description, isVirtual := classifyInterface(iface.Name)
+			metadata := adapterMetadataByIndex[iface.Index]
+			kind, description, isVirtual := describeInterface(iface.Name, metadata)
 			path := NetworkPath{
 				Name:         iface.Name,
-				FriendlyName: strings.TrimSpace(iface.Name),
+				FriendlyName: firstNonEmpty(metadata.FriendlyName, strings.TrimSpace(iface.Name)),
 				Description:  description,
 				Kind:         kind,
 				Host:         host,
@@ -143,7 +149,19 @@ func equalFoldTrimmed(left string, right string) bool {
 }
 
 func classifyInterface(name string) (kind string, description string, isVirtual bool) {
-	normalized := strings.ToLower(strings.TrimSpace(name))
+	return classifyInterfaceWithSignals(name, "", false)
+}
+
+func describeInterface(name string, metadata adapterMetadata) (kind string, description string, isVirtual bool) {
+	if metadata.Kind != "" {
+		return metadata.Kind, firstNonEmpty(metadata.Description, "Network adapter"), metadata.IsVirtual
+	}
+
+	return classifyInterfaceWithSignals(name, metadata.Description, metadata.IsVirtual)
+}
+
+func classifyInterfaceWithSignals(name string, details string, isVirtualHint bool) (kind string, description string, isVirtual bool) {
+	normalized := strings.ToLower(strings.TrimSpace(strings.Join([]string{name, details}, " ")))
 
 	switch {
 	case containsAny(normalized, "tailscale"):
@@ -163,10 +181,17 @@ func classifyInterface(name string) (kind string, description string, isVirtual 
 		"cisco anyconnect",
 	):
 		return "vpn", "VPN or overlay tunnel", true
-	case containsAny(normalized, "wi-fi", "wifi", "wlan", "wireless"):
+	case containsAny(normalized, "wi-fi", "wifi", "wlan", "wireless", "802.11"):
 		return "wifi", "Wi-Fi adapter", false
+	case containsAny(normalized, "wwan", "cellular", "mobile broadband"),
+		strings.Contains(normalized, " lte "),
+		strings.HasPrefix(normalized, "lte "),
+		strings.Contains(normalized, "(lte)"):
+		return "wifi", "Wireless network adapter", false
 	case containsAny(normalized, "usb"):
 		return "usb", "USB network adapter", false
+	case isVirtualHint:
+		return "virtual", "Virtual network adapter", true
 	case containsAny(
 		normalized,
 		"docker",
@@ -180,7 +205,7 @@ func classifyInterface(name string) (kind string, description string, isVirtual 
 		"loopback",
 	):
 		return "virtual", "Virtual network adapter", true
-	case strings.HasPrefix(normalized, "eth"), containsAny(normalized, "ethernet", "gigabit", "lan"):
+	case strings.HasPrefix(normalized, "eth"), containsAny(normalized, "ethernet", "gigabit", "lan", "802.3"):
 		return "ethernet", "Ethernet adapter", false
 	default:
 		return "unknown", "Network adapter", false
@@ -195,4 +220,15 @@ func containsAny(value string, needles ...string) bool {
 	}
 
 	return false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return ""
 }

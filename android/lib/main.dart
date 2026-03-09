@@ -171,10 +171,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     });
 
     Object? lastError;
+    String? failedRouteHost;
     try {
       final candidates = deviceConnectionCandidates(
         device,
-        preferLocalRoutes: _preferLocalRoutes,
+        defaultPreferLocalRoutes: _preferLocalRoutes,
       );
 
       for (final NetworkRoute route in candidates) {
@@ -226,6 +227,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           return;
         } catch (error) {
           lastError = error;
+          failedRouteHost = route.host;
         }
       }
 
@@ -237,9 +239,19 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       }
 
       setState(() {
+        final failedDevice = _recordConnectionFailure(
+          device,
+          routeHost: failedRouteHost ?? device.host,
+          error: error,
+        );
+        _devices = _replaceOrInsertDevice(failedDevice);
+        if (_selectedDevice?.id == device.id) {
+          _selectedDevice = failedDevice;
+        }
         _status = 'Connection failed';
       });
 
+      await _persistState();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not connect: $error')),
       );
@@ -479,6 +491,21 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         _selectedDevice = updatedDevice;
       }
       _status = 'Preferred route set to ${route.displayName}';
+    });
+
+    await _persistState();
+  }
+
+  Future<void> _setRoutePolicy(Device device, String policy) async {
+    final updatedDevice = device.copyWith(routePolicy: policy);
+
+    setState(() {
+      _devices = _replaceOrInsertDevice(updatedDevice);
+      if (_selectedDevice?.id == device.id) {
+        _selectedDevice = updatedDevice;
+      }
+      _status =
+          '${updatedDevice.name} now uses ${deviceRoutePolicyLabel(policy).toLowerCase()} routing';
     });
 
     await _persistState();
@@ -757,13 +784,21 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                 device.networkRoutes,
                 existing.networkRoutes,
               ),
+              routePolicy: device.routePolicy == DeviceRoutePolicy.inherit
+                  ? existing.routePolicy
+                  : device.routePolicy,
               preferredRouteHost:
                   device.preferredRouteHost ?? existing.preferredRouteHost,
               lastSuccessfulRouteHost: device.lastSuccessfulRouteHost ??
                   existing.lastSuccessfulRouteHost,
+              lastFailedRouteHost:
+                  device.lastFailedRouteHost ?? existing.lastFailedRouteHost,
               lastSeenAt: existing.lastSeenAt ?? device.lastSeenAt,
               lastConnectedAt:
                   device.lastConnectedAt ?? existing.lastConnectedAt,
+              lastFailedAt: device.lastFailedAt ?? existing.lastFailedAt,
+              lastFailureMessage:
+                  device.lastFailureMessage ?? existing.lastFailureMessage,
             );
     }
     return merged.values.toList();
@@ -856,9 +891,25 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         lastSeenAt: now,
         lastConnectedAt: now,
         lastSuccessfulRouteHost: routeHost,
+        clearLastFailedRouteHost: true,
+        clearLastFailedAt: true,
+        clearLastFailureMessage: true,
       ),
       currentRoute,
       markPreferred: rememberRoute,
+    );
+  }
+
+  Device _recordConnectionFailure(
+    Device device, {
+    required String routeHost,
+    required Object error,
+  }) {
+    return device.copyWith(
+      lastFailedRouteHost: routeHost,
+      lastFailedAt: DateTime.now().toUtc(),
+      lastFailureMessage: '$error',
+      lastSeenAt: DateTime.now().toUtc(),
     );
   }
 
@@ -1026,6 +1077,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         onDeleteDevice: _deleteDevice,
         onRefreshDevices: _refreshDevices,
         onSetPreferredRoute: _setPreferredRoute,
+        onSetRoutePolicy: _setRoutePolicy,
         onPreferLocalRoutesChanged: _setPreferLocalRoutes,
       ),
       MouseScreen(

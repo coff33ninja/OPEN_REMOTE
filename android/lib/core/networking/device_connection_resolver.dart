@@ -2,8 +2,12 @@ import '../models/device.dart';
 
 List<NetworkRoute> deviceConnectionCandidates(
   Device device, {
-  required bool preferLocalRoutes,
+  required bool defaultPreferLocalRoutes,
 }) {
+  final preferLocalRoutes = effectivePreferLocalRoutes(
+    device,
+    defaultPreferLocalRoutes: defaultPreferLocalRoutes,
+  );
   final candidates = mergeNetworkRoutes(
     <NetworkRoute>[
       NetworkRoute(
@@ -44,6 +48,20 @@ List<NetworkRoute> deviceConnectionCandidates(
   );
 
   return candidates;
+}
+
+bool effectivePreferLocalRoutes(
+  Device device, {
+  required bool defaultPreferLocalRoutes,
+}) {
+  switch (device.routePolicy) {
+    case DeviceRoutePolicy.localFirst:
+      return true;
+    case DeviceRoutePolicy.rememberedFirst:
+      return false;
+    default:
+      return defaultPreferLocalRoutes;
+  }
 }
 
 Device deviceWithRoute(

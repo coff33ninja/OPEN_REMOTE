@@ -29,13 +29,21 @@ Pair the Android client with a desktop agent in one scan without manual IP entry
   "networks": [
     {
       "name": "Wi-Fi",
+      "friendly_name": "Intel Wi-Fi 6 AX201",
+      "description": "Wi-Fi adapter",
+      "kind": "wifi",
       "host": "192.168.1.50",
+      "preferred": true,
       "wake_mac": "AA:BB:CC:DD:EE:FF",
       "wake_broadcast": "192.168.1.255",
       "wake_port": 9
     },
     {
       "name": "Tailscale",
+      "friendly_name": "Tailscale",
+      "description": "Tailscale VPN tunnel",
+      "kind": "vpn",
+      "is_virtual": true,
       "host": "100.64.0.10"
     }
   ]
@@ -56,4 +64,5 @@ openremote://pair?data=<base64url-json>
 - The agent records last-seen timestamps for paired devices.
 - Wake metadata is advisory and is used by the Android client to send WOL packets even while the agent itself is offline.
 - Per-network options let the Android client prefer a wake-capable LAN route or intentionally choose a remote-only route such as a VPN address.
+- Network options can include friendly adapter names, transport kind, virtual-adapter hints, and route preference so Android can present a clearer route picker and remember the best path per device.
 - Future revisions should add optional TLS and device-scoped permissions.
