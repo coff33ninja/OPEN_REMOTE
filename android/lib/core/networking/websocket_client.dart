@@ -6,6 +6,8 @@ import '../models/command.dart';
 class RemoteClient {
   WebSocket? _socket;
 
+  bool get isConnected => _socket != null;
+
   Future<void> connect(Uri url, {String? accessToken}) async {
     await dispose();
 

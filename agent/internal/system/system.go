@@ -26,6 +26,7 @@ type Executor struct {
 	logger       *log.Logger
 	mu           sync.Mutex
 	cachedVolume int
+	wakeTarget   WakeTarget
 }
 
 func NewExecutor(logger *log.Logger) *Executor {

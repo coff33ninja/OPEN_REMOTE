@@ -11,7 +11,8 @@ class PersistedAppState {
     this.favoriteDeviceIds = const <String>{},
     this.recentDeviceIds = const <String>[],
     this.favoriteRemoteIds = const <String>{},
-    this.savedRemoteLayouts = const <RemoteLayout>[],
+    this.cachedRemoteLayouts = const <RemoteLayout>[],
+    this.designedRemoteLayouts = const <RemoteLayout>[],
     this.selectedDeviceId,
   });
 
@@ -19,7 +20,8 @@ class PersistedAppState {
   final Set<String> favoriteDeviceIds;
   final List<String> recentDeviceIds;
   final Set<String> favoriteRemoteIds;
-  final List<RemoteLayout> savedRemoteLayouts;
+  final List<RemoteLayout> cachedRemoteLayouts;
+  final List<RemoteLayout> designedRemoteLayouts;
   final String? selectedDeviceId;
 
   factory PersistedAppState.fromJson(Map<String, dynamic> json) {
@@ -40,11 +42,27 @@ class PersistedAppState {
           (json['favorite_remote_ids'] as List<dynamic>? ?? const <dynamic>[])
               .map((dynamic item) => item.toString())
               .toSet(),
+      cachedRemoteLayouts: (json['cached_remote_layouts'] as List<dynamic>? ??
+              json['saved_remote_layouts'] as List<dynamic>? ??
+              const <dynamic>[])
+          .map((dynamic item) =>
+              RemoteLayout.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      designedRemoteLayouts:
+          (json['designed_remote_layouts'] as List<dynamic>? ??
+                  const <dynamic>[])
+              .map((dynamic item) =>
+                  RemoteLayout.fromJson(item as Map<String, dynamic>))
+              .toList(),
+      // Backward compatibility for older persisted state.
+      // Once the migration settles, `saved_remote_layouts` can be removed.
+      /*
       savedRemoteLayouts:
           (json['saved_remote_layouts'] as List<dynamic>? ?? const <dynamic>[])
               .map((dynamic item) =>
                   RemoteLayout.fromJson(item as Map<String, dynamic>))
               .toList(),
+      */
       selectedDeviceId: json['selected_device_id'] as String?,
     );
   }
@@ -56,7 +74,10 @@ class PersistedAppState {
       'favorite_device_ids': favoriteDeviceIds.toList()..sort(),
       'recent_device_ids': recentDeviceIds,
       'favorite_remote_ids': favoriteRemoteIds.toList()..sort(),
-      'saved_remote_layouts': savedRemoteLayouts
+      'cached_remote_layouts': cachedRemoteLayouts
+          .map((RemoteLayout remote) => remote.toJson())
+          .toList(),
+      'designed_remote_layouts': designedRemoteLayouts
           .map((RemoteLayout remote) => remote.toJson())
           .toList(),
       'selected_device_id': selectedDeviceId,

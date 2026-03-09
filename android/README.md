@@ -10,9 +10,13 @@ The generated native Android project now lives under `android/`, so this folder 
 - mDNS discovery using `multicast_dns`
 - a transport client using `dart:io` WebSocket support
 - pair-URI parsing and pairing completion against the agent API
+- camera QR scanning for desktop pairing
 - remote catalog loading from the agent
+- local visual remote designer with live preview and JSON export
 - dynamic rendering for buttons, sliders, touchpads, d-pads, button grids, text input, and macros
 - file upload support
+- Android share-intent intake that uploads files to the connected agent
+- persistence for paired agents, favorites, recents, and cached layouts
 - filesystem browsing and process management screens
 - mouse, keyboard, media, and custom remote screens
 - bundled sample remotes under `assets/remotes/`

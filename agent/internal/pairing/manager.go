@@ -18,6 +18,9 @@ type Session struct {
 	DeviceName    string    `json:"device"`
 	Service       string    `json:"service"`
 	WebSocketPath string    `json:"ws_path"`
+	WakeMAC       string    `json:"wake_mac,omitempty"`
+	WakeBroadcast string    `json:"wake_broadcast,omitempty"`
+	WakePort      int       `json:"wake_port,omitempty"`
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 
@@ -36,7 +39,16 @@ func NewManager(ttl time.Duration, scheme string) *Manager {
 	}
 }
 
-func (m *Manager) CreateSession(host string, port int, deviceName string, service string, wsPath string) (Session, error) {
+func (m *Manager) CreateSession(
+	host string,
+	port int,
+	deviceName string,
+	service string,
+	wsPath string,
+	wakeMAC string,
+	wakeBroadcast string,
+	wakePort int,
+) (Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -54,6 +66,15 @@ func (m *Manager) CreateSession(host string, port int, deviceName string, servic
 		"service": service,
 		"ws_path": wsPath,
 	}
+	if wakeMAC != "" {
+		payload["wake_mac"] = wakeMAC
+	}
+	if wakeBroadcast != "" {
+		payload["wake_broadcast"] = wakeBroadcast
+	}
+	if wakePort > 0 {
+		payload["wake_port"] = wakePort
+	}
 
 	encoded, err := encodePayload(payload)
 	if err != nil {
@@ -70,6 +91,9 @@ func (m *Manager) CreateSession(host string, port int, deviceName string, servic
 		DeviceName:    deviceName,
 		Service:       service,
 		WebSocketPath: wsPath,
+		WakeMAC:       wakeMAC,
+		WakeBroadcast: wakeBroadcast,
+		WakePort:      wakePort,
 		ExpiresAt:     expiresAt,
 	}, nil
 }

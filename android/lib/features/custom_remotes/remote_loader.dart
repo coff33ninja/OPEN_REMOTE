@@ -12,6 +12,7 @@ class RemoteLoader {
     'assets/remotes/meeting_controls.json',
     'assets/remotes/mouse_touchpad.json',
     'assets/remotes/movie_mode.json',
+    'assets/remotes/power_controls.json',
     'assets/remotes/presentation_remote.json',
   ];
 

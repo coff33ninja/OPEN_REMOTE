@@ -8,6 +8,7 @@ import (
 
 	"github.com/grandcat/zeroconf"
 	"openremote/agent/internal/config"
+	"openremote/agent/internal/system"
 )
 
 type Descriptor struct {
@@ -20,16 +21,23 @@ type Descriptor struct {
 }
 
 type Service struct {
-	config config.Config
-	logger *log.Logger
-	mu     sync.Mutex
-	server *zeroconf.Server
+	config     config.Config
+	logger     *log.Logger
+	wakeTarget system.WakeTarget
+	mu         sync.Mutex
+	server     *zeroconf.Server
 }
 
-func NewService(cfg config.Config, logger *log.Logger) *Service {
+func NewService(cfg config.Config, logger *log.Logger, wakeTarget ...system.WakeTarget) *Service {
+	var target system.WakeTarget
+	if len(wakeTarget) > 0 {
+		target = wakeTarget[0]
+	}
+
 	return &Service{
-		config: cfg,
-		logger: logger,
+		config:     cfg,
+		logger:     logger,
+		wakeTarget: target,
 	}
 }
 
@@ -81,9 +89,18 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) txtRecords() []string {
-	return []string{
+	records := []string{
 		"app=OpenRemote",
 		"ws_path=" + s.config.WebSocketPath,
 		"http_port=" + strconv.Itoa(s.config.Port),
 	}
+	if s.wakeTarget.Valid() {
+		records = append(
+			records,
+			"wake_mac="+s.wakeTarget.MAC,
+			"wake_broadcast="+s.wakeTarget.Broadcast,
+			"wake_port="+strconv.Itoa(s.wakeTarget.Port),
+		)
+	}
+	return records
 }

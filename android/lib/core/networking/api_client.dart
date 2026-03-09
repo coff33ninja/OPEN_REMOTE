@@ -11,6 +11,48 @@ import '../models/remote_layout.dart';
 class ApiClient {
   const ApiClient();
 
+  Future<Device> fetchMeta(Device device) async {
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.getUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: '/api/v1/meta',
+        ),
+      );
+
+      final response = await request.close();
+      final payload = await utf8.decoder.bind(response).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Metadata request failed with status ${response.statusCode}: $payload',
+        );
+      }
+
+      final json = jsonDecode(payload) as Map<String, dynamic>;
+      final metadata = Device.fromJson(
+        <String, dynamic>{
+          ...json,
+          'id': device.id,
+          'access_token': device.accessToken,
+        },
+      );
+
+      return device.copyWith(
+        name: metadata.name,
+        host: metadata.host,
+        port: metadata.port,
+        serviceType: metadata.serviceType,
+        websocketPath: metadata.websocketPath,
+        wakeTarget: metadata.wakeTarget ?? device.wakeTarget,
+      );
+    } finally {
+      httpClient.close();
+    }
+  }
+
   Future<Device> completePairing(
     PairingPayload pairing,
     String clientDeviceName,

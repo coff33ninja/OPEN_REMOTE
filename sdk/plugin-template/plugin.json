@@ -1,12 +1,12 @@
 {
-  "id": "spotify-remote",
-  "name": "Spotify Remote",
-  "version": "0.1.0",
-  "category": "media",
+  "id": "plugin-template",
+  "name": "Plugin Template",
+  "category": "template",
+  "description": "Starter manifest for an external OpenRemote plugin executable",
   "commands": [
-    "spotify_play",
-    "spotify_pause",
-    "spotify_next"
+    "template_noop"
   ],
-  "min_agent_version": "0.1.0"
+  "executable": "plugin-template.exe",
+  "args": [],
+  "timeout_ms": 5000
 }

@@ -71,6 +71,13 @@ class DiscoveryService {
               port: srv.port,
               serviceType: serviceType,
               websocketPath: txtValues['ws_path'] ?? '/ws',
+              wakeTarget: txtValues['wake_mac'] == null
+                  ? null
+                  : WakeTarget(
+                      mac: txtValues['wake_mac'] ?? '',
+                      broadcast: txtValues['wake_broadcast'] ?? '',
+                      port: int.tryParse(txtValues['wake_port'] ?? '') ?? 9,
+                    ),
             );
           }
         }

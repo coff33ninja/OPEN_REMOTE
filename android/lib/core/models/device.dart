@@ -1,3 +1,49 @@
+class WakeTarget {
+  const WakeTarget({
+    required this.mac,
+    required this.broadcast,
+    this.port = 9,
+  });
+
+  final String mac;
+  final String broadcast;
+  final int port;
+
+  bool get isConfigured => mac.trim().isNotEmpty && broadcast.trim().isNotEmpty;
+
+  factory WakeTarget.fromJson(Map<String, dynamic> json) {
+    final rawPort = json['port'] ?? json['wake_port'];
+    return WakeTarget(
+      mac: json['mac'] as String? ?? json['wake_mac'] as String? ?? '',
+      broadcast: json['broadcast'] as String? ??
+          json['wake_broadcast'] as String? ??
+          json['wake_host'] as String? ??
+          '',
+      port: rawPort is num ? rawPort.toInt() : int.tryParse('$rawPort') ?? 9,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'mac': mac,
+      'broadcast': broadcast,
+      'port': port,
+    };
+  }
+
+  WakeTarget copyWith({
+    String? mac,
+    String? broadcast,
+    int? port,
+  }) {
+    return WakeTarget(
+      mac: mac ?? this.mac,
+      broadcast: broadcast ?? this.broadcast,
+      port: port ?? this.port,
+    );
+  }
+}
+
 class Device {
   const Device({
     required this.id,
@@ -7,6 +53,7 @@ class Device {
     required this.serviceType,
     this.accessToken,
     this.websocketPath = '/ws',
+    this.wakeTarget,
   });
 
   final String id;
@@ -16,6 +63,9 @@ class Device {
   final String serviceType;
   final String? accessToken;
   final String websocketPath;
+  final WakeTarget? wakeTarget;
+
+  bool get canWake => wakeTarget?.isConfigured ?? false;
 
   Uri get websocketUrl => Uri(
         scheme: 'ws',
@@ -25,16 +75,37 @@ class Device {
       );
 
   factory Device.fromJson(Map<String, dynamic> json) {
+    WakeTarget? wakeTarget;
+    final wakeTargetJson = json['wake_target'];
+    if (wakeTargetJson is Map) {
+      final parsed =
+          WakeTarget.fromJson(Map<String, dynamic>.from(wakeTargetJson));
+      if (parsed.isConfigured) {
+        wakeTarget = parsed;
+      }
+    } else if (json['wake_mac'] != null || json['wake_broadcast'] != null) {
+      final parsed = WakeTarget.fromJson(json);
+      if (parsed.isConfigured) {
+        wakeTarget = parsed;
+      }
+    }
+
     return Device(
-      id: json['id'] as String? ?? json['host'] as String? ?? 'unknown-device',
+      id: json['id'] as String? ??
+          json['host'] as String? ??
+          json['public_host'] as String? ??
+          'unknown-device',
       name: json['name'] as String? ??
           json['device_name'] as String? ??
           'OpenRemote Agent',
-      host: json['host'] as String? ?? '127.0.0.1',
+      host: json['host'] as String? ??
+          json['public_host'] as String? ??
+          '127.0.0.1',
       port: (json['port'] as num?)?.toInt() ?? 9876,
       serviceType: json['service_type'] as String? ?? '_openremote._tcp',
       accessToken: json['access_token'] as String?,
       websocketPath: json['websocket_path'] as String? ?? '/ws',
+      wakeTarget: wakeTarget,
     );
   }
 
@@ -47,7 +118,8 @@ class Device {
       'service_type': serviceType,
       'access_token': accessToken,
       'websocket_path': websocketPath,
-    };
+      'wake_target': wakeTarget?.toJson(),
+    }..removeWhere((String key, dynamic value) => value == null);
   }
 
   Device copyWith({
@@ -58,6 +130,7 @@ class Device {
     String? serviceType,
     String? accessToken,
     String? websocketPath,
+    WakeTarget? wakeTarget,
   }) {
     return Device(
       id: id ?? this.id,
@@ -67,6 +140,7 @@ class Device {
       serviceType: serviceType ?? this.serviceType,
       accessToken: accessToken ?? this.accessToken,
       websocketPath: websocketPath ?? this.websocketPath,
+      wakeTarget: wakeTarget ?? this.wakeTarget,
     );
   }
 }

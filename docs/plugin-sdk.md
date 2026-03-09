@@ -19,6 +19,20 @@ Each plugin must provide:
 The current repository ships builtin plugins inside the agent module. External plugins should depend on the public contract package at `openremote/agent/pkg/pluginsdk`.
 
 The SDK template in [`sdk/plugin-template/README.md`](/j:/SCRIPTS/OPEN_REMOTE/sdk/plugin-template/README.md) is its own Go module and points at the local agent module through a `replace` directive so it compiles inside this repository without importing `internal` packages.
+The agent now loads external plugins from disk via `plugin.json` plus an executable, and delivers command envelopes as JSON over stdin.
+
+## External Manifest Shape
+
+- `id`: stable plugin identifier.
+- `name`: human-readable plugin name.
+- `category`: manifest category.
+- `description`: short plugin summary.
+- `commands`: explicit list of command names handled by the plugin.
+- `executable`: relative or absolute executable path.
+- `args`: optional argument list.
+- `working_dir`: optional process working directory.
+- `timeout_ms`: optional execution timeout.
+- `environment`: optional environment variable map.
 
 ## Future Enhancements
 

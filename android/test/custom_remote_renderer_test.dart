@@ -12,11 +12,22 @@ void main() {
       'id': 'meeting-controls',
       'name': 'Meeting Controls',
       'category': 'productivity',
+      'canvas': <String, dynamic>{
+        'width': 1000,
+        'height': 1600,
+        'grid_size': 40,
+      },
       'layout': <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'slides',
           'type': 'dpad',
           'label': 'Slides',
+          'frame': <String, dynamic>{
+            'x': 60,
+            'y': 60,
+            'width': 420,
+            'height': 420,
+          },
           'props': <String, dynamic>{
             'left': <String, dynamic>{
               'label': 'Prev',
@@ -36,6 +47,12 @@ void main() {
           'id': 'quick-actions',
           'type': 'grid_buttons',
           'label': 'Quick Actions',
+          'frame': <String, dynamic>{
+            'x': 60,
+            'y': 540,
+            'width': 720,
+            'height': 320,
+          },
           'props': <String, dynamic>{
             'columns': 2,
             'buttons': <Map<String, dynamic>>[
@@ -70,6 +87,8 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const Key('remote-canvas-meeting-controls')),
+        findsOneWidget);
     expect(find.text('Slides'), findsOneWidget);
     expect(find.text('Quick Actions'), findsOneWidget);
     expect(find.text('Prev'), findsOneWidget);

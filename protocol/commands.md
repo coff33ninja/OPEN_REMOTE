@@ -40,8 +40,14 @@
 
 ### Power
 
+- `power_wake`: optional `mac`, `broadcast`, `port`
 - `power_sleep`
 - `power_shutdown`
+
+`power_wake` is special:
+
+- When it reaches the agent, the power plugin can emit a Wake-on-LAN magic packet using either command arguments or the agent's configured/default wake target.
+- The Android client also intercepts `power_wake` and can send the magic packet directly from the phone when the selected agent has persisted wake metadata. That is what allows a previously paired but currently offline PC to be powered on.
 
 ### Presentation
 

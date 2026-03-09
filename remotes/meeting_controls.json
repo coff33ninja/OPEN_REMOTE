@@ -2,11 +2,22 @@
   "id": "meeting-controls",
   "name": "Meeting Controls",
   "category": "productivity",
+  "canvas": {
+    "width": 1000,
+    "height": 1600,
+    "grid_size": 40
+  },
   "layout": [
     {
       "id": "slides-dpad",
       "type": "dpad",
       "label": "Slides",
+      "frame": {
+        "x": 60,
+        "y": 60,
+        "width": 420,
+        "height": 420
+      },
       "props": {
         "left": {
           "label": "Prev",
@@ -40,6 +51,12 @@
       "id": "meeting-grid",
       "type": "grid_buttons",
       "label": "Quick Actions",
+      "frame": {
+        "x": 60,
+        "y": 540,
+        "width": 720,
+        "height": 360
+      },
       "props": {
         "columns": 2,
         "buttons": [

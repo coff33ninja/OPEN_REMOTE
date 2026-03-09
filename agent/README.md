@@ -12,9 +12,11 @@ The agent is now a working runtime with these pieces in place:
 - authenticated WebSocket command transport
 - remote definition catalog and document serving
 - QR pairing image generation
+- browser-based pairing page at `/pair`
 - pairing session generation
 - trusted device persistence
 - command routing to builtin plugins
+- disk-loaded external plugin manifests and executables
 - Windows automation for mouse, keyboard, media, presentation, power, and approximate volume control
 
 ## Run
@@ -33,3 +35,5 @@ go build ./...
 - `OPENREMOTE_PAIRING_TTL`
 - `OPENREMOTE_DATA_DIR`
 - `OPENREMOTE_REMOTES_DIR`
+- `OPENREMOTE_PLUGINS_DIR`
+- `OPENREMOTE_OPEN_PAIRING_UI`

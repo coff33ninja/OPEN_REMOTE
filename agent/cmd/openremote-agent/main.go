@@ -34,6 +34,11 @@ func main() {
 	}
 
 	executor := system.NewExecutor(logger)
+	executor.ConfigureWakeTarget(cfg.PublicHost, system.WakeTarget{
+		MAC:       cfg.WakeMAC,
+		Broadcast: cfg.WakeBroadcast,
+		Port:      cfg.WakePort,
+	})
 	registry := coreplugins.NewRegistry(
 		pluginmouse.New(executor),
 		pluginkeyboard.New(executor),
@@ -58,7 +63,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	discoveryService := discovery.NewService(cfg, logger)
+	discoveryService := discovery.NewService(cfg, logger, executor.WakeTarget())
 	application := server.NewApplication(logger, cfg, registry, pairingManager, authorizer, discoveryService, executor)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

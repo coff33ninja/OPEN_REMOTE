@@ -29,9 +29,9 @@ The current implementation is biased toward the first usable milestone:
 
 1. Agent discovery over mDNS plus HTTP and WebSocket control endpoints.
 2. QR-based pairing and token issuance flow.
-3. Core control plugins for mouse, keyboard, media, presentation, power, volume, and macros.
+3. Core control plugins for mouse, keyboard, media, presentation, power, Wake-on-LAN, volume, and macros.
 4. Dynamic remote definitions stored as JSON and served by the agent.
-5. Explorer, process list, file upload, and a Flutter client that can pair, discover, connect, and load remotes from the agent.
+5. Explorer, process list, file upload, pairing page UI, and a Flutter client that can pair, scan, discover, share, persist, design, connect, and load remotes from the agent.
 
 ## Validation
 
@@ -50,7 +50,7 @@ go build ./...
 .\openremote-agent.exe
 ```
 
-The agent now exposes a live HTTP API, a live authenticated WebSocket endpoint, mDNS advertisement, and QR pairing output.
+The agent now exposes a live HTTP API, a live authenticated WebSocket endpoint, mDNS advertisement, QR pairing output, and wake-target metadata for LAN power-on.
 
 ### Android
 
@@ -60,7 +60,7 @@ flutter pub get
 flutter build apk --debug
 ```
 
-The Android client now includes a generated native Android project plus pair-URI flow, mDNS discovery, WebSocket transport, remote catalog loading, custom remote rendering, explorer, tasks, and file upload support.
+The Android client now includes a generated native Android project plus pair-URI flow, camera scanning, mDNS discovery, WebSocket transport, remote catalog loading, a local visual remote designer, custom remote rendering, explorer, tasks, file upload, Android share intake, paired-device persistence, recent/favorite agents, favorite remotes, cached layouts, and direct Wake-on-LAN for remembered agents.
 
 ## Primary Docs
 

@@ -30,13 +30,13 @@ func (p *Plugin) Manifest() internalplugins.Manifest {
 		Name:        p.Name(),
 		Category:    "system",
 		Description: "Power management commands",
-		Commands:    []string{"power_sleep", "power_shutdown"},
+		Commands:    []string{"power_wake", "power_sleep", "power_shutdown"},
 	}
 }
 
 func (p *Plugin) Supports(command internalplugins.Command) bool {
 	switch command.CommandName() {
-	case "power_sleep", "power_shutdown":
+	case "power_wake", "power_sleep", "power_shutdown":
 		return true
 	default:
 		return false
@@ -45,6 +45,12 @@ func (p *Plugin) Supports(command internalplugins.Command) bool {
 
 func (p *Plugin) Execute(_ context.Context, command internalplugins.Command) error {
 	switch command.CommandName() {
+	case "power_wake":
+		return p.executor.WakeOnLAN(system.WakeTarget{
+			MAC:       command.StringArg("mac", ""),
+			Broadcast: command.StringArg("broadcast", command.StringArg("host", "")),
+			Port:      command.IntArg("port", 0),
+		})
 	case "power_sleep":
 		return p.executor.PowerAction("sleep")
 	case "power_shutdown":

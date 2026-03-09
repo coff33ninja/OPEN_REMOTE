@@ -23,13 +23,17 @@ agent/
 
 - Serve metadata and health endpoints.
 - Issue pairing sessions and exchange them for access tokens.
+- Advertise wake-target metadata for offline power-on flows.
 - Authenticate command requests with bearer tokens.
 - Route commands to builtin or future external plugins.
+- Load external plugin executables from disk through `plugin.json` manifests.
 - Keep system automation behind a narrow executor interface.
 
 ## Initial API Surface
 
 - `GET /healthz`: process health.
+- `GET /pair`: browser-based pairing UI with embedded QR code.
+- `GET /`: redirect to the pairing UI.
 - `GET /api/v1/meta`: agent capabilities and endpoint metadata.
 - `GET /api/v1/plugins`: builtin plugin manifests.
 - `GET /api/v1/remotes/catalog`: remote catalog summary.
@@ -49,5 +53,5 @@ agent/
 
 1. Add bidirectional event frames over WebSocket instead of ack-only responses.
 2. Replace cached volume stepping with direct OS mixer integration.
-3. Add plugin loading from disk and compatibility checks.
-4. Add a local desktop pairing UI that renders the QR code directly.
+3. Add compatibility/version checks for external plugins.
+4. Add a native window wrapper around the pairing page instead of a browser tab.

@@ -11,6 +11,7 @@ import 'core/models/pairing.dart';
 import 'core/models/remote_layout.dart';
 import 'core/networking/api_client.dart';
 import 'core/networking/discovery.dart';
+import 'core/networking/wake_on_lan_client.dart';
 import 'core/networking/websocket_client.dart';
 import 'core/persistence/app_state_store.dart';
 import 'features/custom_remotes/remote_loader.dart';
@@ -21,6 +22,7 @@ import 'features/file_explorer/file_explorer_screen.dart';
 import 'features/keyboard_remote/keyboard_screen.dart';
 import 'features/media_remote/media_screen.dart';
 import 'features/mouse_remote/mouse_screen.dart';
+import 'features/remote_designer/remote_designer_screen.dart';
 import 'features/task_manager/task_manager_screen.dart';
 import 'ui/themes/app_theme.dart';
 
@@ -55,11 +57,13 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   final DiscoveryService _discoveryService = const DiscoveryService();
   final RemoteLoader _remoteLoader = const RemoteLoader();
   final AppStateStore _appStateStore = const AppStateStore();
+  final WakeOnLanClient _wakeOnLanClient = const WakeOnLanClient();
 
   List<Device> _devices = const <Device>[];
   List<RemoteLayout> _remotes = const <RemoteLayout>[];
   List<RemoteLayout> _bundledRemotes = const <RemoteLayout>[];
-  List<RemoteLayout> _savedRemoteLayouts = const <RemoteLayout>[];
+  List<RemoteLayout> _cachedRemoteLayouts = const <RemoteLayout>[];
+  List<RemoteLayout> _designedRemoteLayouts = const <RemoteLayout>[];
   Set<String> _favoriteDeviceIds = <String>{};
   List<String> _recentDeviceIds = const <String>[];
   Set<String> _favoriteRemoteIds = <String>{};
@@ -86,8 +90,14 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     );
     final mergedRemotes = _mergeRemoteLayouts(
       remotes,
-      persisted.savedRemoteLayouts,
+      persisted.cachedRemoteLayouts,
+      persisted.designedRemoteLayouts,
     );
+    final preferredDevice = persisted.selectedDeviceId == null
+        ? null
+        : mergedDevices.where((Device device) {
+            return device.id == persisted.selectedDeviceId;
+          }).firstOrNull;
 
     if (!mounted) {
       return;
@@ -96,11 +106,13 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     setState(() {
       _devices = mergedDevices;
       _bundledRemotes = remotes;
-      _savedRemoteLayouts = persisted.savedRemoteLayouts;
+      _cachedRemoteLayouts = persisted.cachedRemoteLayouts;
+      _designedRemoteLayouts = persisted.designedRemoteLayouts;
       _remotes = mergedRemotes;
       _favoriteDeviceIds = persisted.favoriteDeviceIds;
       _recentDeviceIds = persisted.recentDeviceIds;
       _favoriteRemoteIds = persisted.favoriteRemoteIds;
+      _selectedDevice = preferredDevice;
       _loading = false;
     });
 
@@ -109,12 +121,6 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     if (!mounted) {
       return;
     }
-
-    final preferredDevice = persisted.selectedDeviceId == null
-        ? null
-        : mergedDevices.where((Device device) {
-            return device.id == persisted.selectedDeviceId;
-          }).firstOrNull;
     if (preferredDevice != null &&
         preferredDevice.accessToken != null &&
         preferredDevice.accessToken!.isNotEmpty) {
@@ -140,29 +146,38 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     });
 
     try {
+      final resolvedDevice = await _apiClient.fetchMeta(device);
       await _client.connect(
-        device.websocketUrl,
-        accessToken: device.accessToken,
+        resolvedDevice.websocketUrl,
+        accessToken: resolvedDevice.accessToken,
       );
-      final remoteCatalog = await _apiClient.fetchRemoteCatalog(device);
+      final remoteCatalog = await _apiClient.fetchRemoteCatalog(resolvedDevice);
       if (!mounted) {
         return;
       }
 
       final mergedRemotes = remoteCatalog.isNotEmpty
-          ? _mergeRemoteLayouts(_bundledRemotes, remoteCatalog)
-          : _mergeRemoteLayouts(_bundledRemotes, _savedRemoteLayouts);
+          ? _mergeRemoteLayouts(
+              _bundledRemotes,
+              remoteCatalog,
+              _designedRemoteLayouts,
+            )
+          : _mergeRemoteLayouts(
+              _bundledRemotes,
+              _cachedRemoteLayouts,
+              _designedRemoteLayouts,
+            );
 
       setState(() {
-        _selectedDevice = device;
-        _savedRemoteLayouts =
-            remoteCatalog.isNotEmpty ? remoteCatalog : _savedRemoteLayouts;
+        _selectedDevice = resolvedDevice;
+        _cachedRemoteLayouts =
+            remoteCatalog.isNotEmpty ? remoteCatalog : _cachedRemoteLayouts;
         _remotes = mergedRemotes;
-        _devices = _replaceOrInsertDevice(device);
-        _recentDeviceIds = _recordRecentDevice(device.id);
+        _devices = _replaceOrInsertDevice(resolvedDevice);
+        _recentDeviceIds = _recordRecentDevice(resolvedDevice.id);
         _status = announceRestore
-            ? 'Connected to ${device.name}'
-            : 'Restored ${device.name}';
+            ? 'Connected to ${resolvedDevice.name}'
+            : 'Restored ${resolvedDevice.name}';
       });
 
       await _persistState();
@@ -178,6 +193,51 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not connect: $error')),
+      );
+    }
+  }
+
+  Future<void> _wakeDevice(Device device) async {
+    final wakeTarget = device.wakeTarget;
+    if (wakeTarget == null || !wakeTarget.isConfigured) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('No wake target is configured for ${device.name}.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedDevice = device;
+      _devices = _replaceOrInsertDevice(device);
+      _recentDeviceIds = _recordRecentDevice(device.id);
+      _status = 'Sending wake packet to ${device.name}';
+    });
+    await _persistState();
+
+    try {
+      await _wakeOnLanClient.send(wakeTarget);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _status = 'Sent wake packet to ${device.name}';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _status = 'Wake failed';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Wake failed: $error')),
       );
     }
   }
@@ -377,7 +437,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         favoriteDeviceIds: _favoriteDeviceIds,
         recentDeviceIds: _recentDeviceIds,
         favoriteRemoteIds: _favoriteRemoteIds,
-        savedRemoteLayouts: _savedRemoteLayouts,
+        cachedRemoteLayouts: _cachedRemoteLayouts,
+        designedRemoteLayouts: _designedRemoteLayouts,
         selectedDeviceId: _selectedDevice?.id,
       ),
     );
@@ -400,6 +461,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               accessToken: device.accessToken,
               websocketPath: existing.websocketPath,
               serviceType: existing.serviceType,
+              wakeTarget: existing.wakeTarget ?? device.wakeTarget,
             );
     }
     return merged.values.toList();
@@ -408,6 +470,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   List<RemoteLayout> _mergeRemoteLayouts(
     List<RemoteLayout> bundled,
     List<RemoteLayout> cached,
+    List<RemoteLayout> designed,
   ) {
     final merged = <String, RemoteLayout>{};
     for (final RemoteLayout remote in bundled) {
@@ -416,7 +479,45 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     for (final RemoteLayout remote in cached) {
       merged[remote.id] = remote;
     }
+    for (final RemoteLayout remote in designed) {
+      merged[remote.id] = remote;
+    }
     return merged.values.toList();
+  }
+
+  Future<void> _saveDesignedRemote(RemoteLayout remote) async {
+    setState(() {
+      _designedRemoteLayouts = <RemoteLayout>[
+        remote,
+        ..._designedRemoteLayouts.where(
+          (RemoteLayout existing) => existing.id != remote.id,
+        ),
+      ];
+      _remotes = _mergeRemoteLayouts(
+        _bundledRemotes,
+        _cachedRemoteLayouts,
+        _designedRemoteLayouts,
+      );
+      _favoriteRemoteIds = <String>{..._favoriteRemoteIds, remote.id};
+      _status = 'Saved designer remote ${remote.name}';
+    });
+    await _persistState();
+  }
+
+  Future<void> _deleteDesignedRemote(RemoteLayout remote) async {
+    setState(() {
+      _designedRemoteLayouts = _designedRemoteLayouts
+          .where((RemoteLayout existing) => existing.id != remote.id)
+          .toList();
+      _favoriteRemoteIds = <String>{..._favoriteRemoteIds}..remove(remote.id);
+      _remotes = _mergeRemoteLayouts(
+        _bundledRemotes,
+        _cachedRemoteLayouts,
+        _designedRemoteLayouts,
+      );
+      _status = 'Deleted designer remote ${remote.name}';
+    });
+    await _persistState();
   }
 
   List<Device> _replaceOrInsertDevice(Device device) {
@@ -494,9 +595,30 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   }
 
   Future<void> _send(CommandEnvelope command) async {
+    if (command.commandName == 'power_wake') {
+      final device = _selectedDevice;
+      if (device == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Select a device to wake first.')),
+        );
+        return;
+      }
+
+      await _wakeDevice(device);
+      return;
+    }
+
     if (_selectedDevice == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Connect to an agent first.')),
+      );
+      return;
+    }
+    if (!_client.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The agent is offline. Wake it or reconnect first.'),
+        ),
       );
       return;
     }
@@ -539,7 +661,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     final orderedRemotes = _orderedRemotes();
 
     return DefaultTabController(
-      length: 8,
+      length: 9,
       child: Scaffold(
         appBar: AppBar(
           title: Text('OpenRemote - $deviceLabel'),
@@ -554,6 +676,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
               Tab(text: 'Tasks'),
               Tab(text: 'Files'),
               Tab(text: 'Custom'),
+              Tab(text: 'Designer'),
             ],
           ),
         ),
@@ -568,33 +691,34 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                     recentDeviceIds: _recentDeviceIds,
                     statusMessage: _status,
                     onConnect: _connectToDevice,
+                    onWake: _wakeDevice,
                     onPairUriSubmit: _pairWithUri,
                     onToggleFavoriteDevice: _toggleFavoriteDevice,
                   ),
                   MouseScreen(
-                    enabled: _selectedDevice != null,
+                    enabled: _client.isConnected,
                     onSend: _send,
                   ),
                   KeyboardScreen(
-                    enabled: _selectedDevice != null,
+                    enabled: _client.isConnected,
                     onSend: _send,
                   ),
                   MediaScreen(
-                    enabled: _selectedDevice != null,
+                    enabled: _client.isConnected,
                     onSend: _send,
                   ),
                   FileExplorerScreen(
-                    enabled: _selectedDevice != null,
+                    enabled: _client.isConnected && _selectedDevice != null,
                     device: _selectedDevice,
                     apiClient: _apiClient,
                   ),
                   TaskManagerScreen(
-                    enabled: _selectedDevice != null,
+                    enabled: _client.isConnected && _selectedDevice != null,
                     device: _selectedDevice,
                     apiClient: _apiClient,
                   ),
                   FileTransferScreen(
-                    enabled: _selectedDevice != null,
+                    enabled: _client.isConnected && _selectedDevice != null,
                     device: _selectedDevice,
                     apiClient: _apiClient,
                     pendingSharedCount: _pendingSharedFiles.length,
@@ -606,6 +730,16 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                     favoriteRemoteIds: _favoriteRemoteIds,
                     onSend: _send,
                     onToggleFavoriteRemote: _toggleFavoriteRemote,
+                  ),
+                  RemoteDesignerScreen(
+                    designedRemotes: List<RemoteLayout>.from(
+                      _designedRemoteLayouts,
+                    )..sort(
+                        (RemoteLayout left, RemoteLayout right) =>
+                            left.name.compareTo(right.name),
+                      ),
+                    onSaveRemote: _saveDesignedRemote,
+                    onDeleteRemote: _deleteDesignedRemote,
                   ),
                 ],
               ),

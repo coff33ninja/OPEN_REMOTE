@@ -23,6 +23,9 @@ type Config struct {
 	PluginsDir    string
 	UploadsDir    string
 	OpenPairingUI bool
+	WakeMAC       string
+	WakeBroadcast string
+	WakePort      int
 }
 
 func Load() (Config, error) {
@@ -37,6 +40,11 @@ func Load() (Config, error) {
 	}
 
 	pairingTTL, err := envDuration("OPENREMOTE_PAIRING_TTL", 2*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	wakePort, err := envInt("OPENREMOTE_WOL_PORT", 9)
 	if err != nil {
 		return Config{}, err
 	}
@@ -56,6 +64,9 @@ func Load() (Config, error) {
 		PluginsDir:    envString("OPENREMOTE_PLUGINS_DIR", filepath.Clean(filepath.Join("..", "plugins"))),
 		UploadsDir:    envString("OPENREMOTE_UPLOADS_DIR", filepath.Clean(filepath.Join("data", "uploads"))),
 		OpenPairingUI: envBool("OPENREMOTE_OPEN_PAIRING_UI", false),
+		WakeMAC:       envString("OPENREMOTE_WOL_MAC", ""),
+		WakeBroadcast: envString("OPENREMOTE_WOL_BROADCAST", ""),
+		WakePort:      wakePort,
 	}, nil
 }
 

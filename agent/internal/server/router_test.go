@@ -30,7 +30,16 @@ import (
 func TestPairingCompleteIssuesToken(t *testing.T) {
 	app, pairManager := newTestApplication(t)
 
-	session, err := pairManager.CreateSession("127.0.0.1", 9876, "Agent", "_openremote._tcp", "/ws")
+	session, err := pairManager.CreateSession(
+		"127.0.0.1",
+		9876,
+		"Agent",
+		"_openremote._tcp",
+		"/ws",
+		"",
+		"",
+		0,
+	)
 	if err != nil {
 		t.Fatalf("CreateSession() error = %v", err)
 	}
@@ -54,6 +63,51 @@ func TestPairingCompleteIssuesToken(t *testing.T) {
 	}
 	if payload["access_token"] == "" {
 		t.Fatalf("payload access_token = %#v, want non-empty", payload["access_token"])
+	}
+}
+
+func TestRootRedirectsToPairPage(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusTemporaryRedirect)
+	}
+	if location := response.Header().Get("Location"); location != "/pair" {
+		t.Fatalf("location = %q, want %q", location, "/pair")
+	}
+}
+
+func TestPairingPageRendersHTML(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/pair", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "Pair Test Agent") {
+		t.Fatalf("body = %s, want pairing heading", response.Body.String())
+	}
+	if !strings.Contains(response.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("content-type = %s, want text/html", response.Header().Get("Content-Type"))
+	}
+}
+
+func TestPairingPageTrailingSlashRendersHTML(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/pair/", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusOK, response.Body.String())
 	}
 }
 
@@ -182,6 +236,11 @@ func newTestApplication(t *testing.T) (*Application, *pairing.Manager) {
 
 	logger := log.New(io.Discard, "", 0)
 	executor := system.NewExecutor(logger)
+	executor.ConfigureWakeTarget("127.0.0.1", system.WakeTarget{
+		MAC:       "AA:BB:CC:DD:EE:FF",
+		Broadcast: "127.0.0.1",
+		Port:      9,
+	})
 	registry := internalplugins.NewRegistry(
 		pluginmouse.New(executor),
 		pluginkeyboard.New(executor),
@@ -203,7 +262,7 @@ func newTestApplication(t *testing.T) (*Application, *pairing.Manager) {
 		registry,
 		pairManager,
 		authorizer,
-		discovery.NewService(cfg, logger),
+		discovery.NewService(cfg, logger, executor.WakeTarget()),
 		executor,
 	), pairManager
 }

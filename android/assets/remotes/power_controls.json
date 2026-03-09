@@ -1,0 +1,25 @@
+{
+  "id": "power-controls",
+  "name": "Power Controls",
+  "category": "system",
+  "layout": [
+    {
+      "id": "wake-pc",
+      "type": "button",
+      "label": "Wake PC",
+      "command": "power_wake"
+    },
+    {
+      "id": "sleep-pc",
+      "type": "button",
+      "label": "Sleep PC",
+      "command": "power_sleep"
+    },
+    {
+      "id": "shutdown-pc",
+      "type": "button",
+      "label": "Shutdown PC",
+      "command": "power_shutdown"
+    }
+  ]
+}

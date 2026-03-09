@@ -8,7 +8,7 @@
 - Builtin plugins for mouse, keyboard, media, presentation, power, and volume.
 - Macro execution support.
 - Filesystem, process list, and file upload endpoints.
-- Flutter client app for discovery, pairing, basic remotes, explorer, tasks, and file transfer.
+- Flutter client app for discovery, QR pairing, share-to-PC intake, persisted remotes, explorer, tasks, and file transfer.
 - Sample JSON remotes in the repository.
 
 ## Phase 2: Dynamic Remotes
@@ -24,4 +24,5 @@
 - File transfer and share-to-PC flows.
 - Plugin packaging and marketplace support.
 - Voice commands and automation chains.
+- Native desktop pairing window.
 - Optional web admin surface.

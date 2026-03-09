@@ -12,6 +12,7 @@ class DeviceListScreen extends StatefulWidget {
     required this.recentDeviceIds,
     required this.statusMessage,
     required this.onConnect,
+    required this.onWake,
     required this.onPairUriSubmit,
     required this.onToggleFavoriteDevice,
   });
@@ -22,6 +23,7 @@ class DeviceListScreen extends StatefulWidget {
   final List<String> recentDeviceIds;
   final String statusMessage;
   final Future<void> Function(Device device) onConnect;
+  final Future<void> Function(Device device) onWake;
   final Future<void> Function(String pairUri) onPairUriSubmit;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
 
@@ -121,13 +123,25 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                   ),
                   onPressed: () => widget.onToggleFavoriteDevice(device),
                 ),
-                trailing: FilledButton(
-                  onPressed: () => widget.onConnect(device),
-                  child: Text(
-                    widget.selectedDevice?.id == device.id
-                        ? 'Connected'
-                        : 'Connect',
-                  ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (device.canWake) ...<Widget>[
+                      OutlinedButton(
+                        onPressed: () => widget.onWake(device),
+                        child: const Text('Wake'),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    FilledButton(
+                      onPressed: () => widget.onConnect(device),
+                      child: Text(
+                        widget.selectedDevice?.id == device.id
+                            ? 'Selected'
+                            : 'Connect',
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );

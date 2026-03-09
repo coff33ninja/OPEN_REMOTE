@@ -21,12 +21,18 @@ android/
 
 - mDNS-based LAN discovery for `_openremote._tcp`.
 - Pair URI ingestion through the `openremote://pair` payload format.
+- Camera QR scanning for pairing sessions.
 - Real pairing completion against the agent API.
+- Wake-on-LAN support for remembered agents, including remote-side `power_wake` interception.
 - Authenticated WebSocket command transport.
+- Local visual remote designer with live preview and JSON export.
 - Dynamic remote rendering from JSON definitions fetched from the agent.
 - Filesystem browsing against the connected agent.
 - Task list viewing against the connected agent.
 - File upload to the connected agent.
+- Android share-intent intake that uploads queued items to the connected agent.
+- Local persistence for paired devices, recent agents, favorite agents, favorite remotes, and cached remote layouts.
+- A bundled power remote for wake, sleep, and shutdown commands.
 - Mouse, keyboard, media, and custom remote starter experiences.
 
 ## Rendering Model
@@ -34,6 +40,7 @@ android/
 The client should treat remotes as data, not screens. Each remote JSON file describes:
 
 - Remote metadata such as id, name, and category.
+- An optional canvas plus absolute frames for positioned layouts.
 - A list of controls with type-specific props.
 - Command bindings that map interactions to protocol commands.
 
@@ -41,7 +48,7 @@ This architecture keeps the app flexible enough for a future visual remote desig
 
 ## Near-Term Android Work
 
-1. Wire the pair URI flow to camera scanning.
-2. Persist paired agents and last-used remotes locally.
-3. Add gesture handling for touchpad and air-mouse controls.
-4. Add visual remote authoring and macro editing.
+1. Add gesture handling for touchpad and air-mouse controls.
+2. Expand the designer into drag-and-drop layout editing and remote sync.
+3. Deep-link `openremote://pair` URIs into the app directly.
+4. Extend share-to-PC beyond uploads into remote-aware actions.

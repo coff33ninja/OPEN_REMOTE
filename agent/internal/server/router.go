@@ -88,8 +88,10 @@ func (a *Application) ListenAndServe(ctx context.Context) error {
 
 func (a *Application) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", a.handleIndex)
 	mux.HandleFunc("/healthz", a.handleHealth)
 	mux.HandleFunc("/pair", a.handlePairingPage)
+	mux.HandleFunc("/pair/", a.handlePairingPage)
 	mux.HandleFunc("/api/v1/meta", a.handleMeta)
 	mux.HandleFunc("/api/v1/plugins", a.handlePlugins)
 	mux.HandleFunc("/api/v1/remotes/catalog", a.handleRemotes)
@@ -111,6 +113,15 @@ func (a *Application) routes() http.Handler {
 	})
 }
 
+func (a *Application) handleIndex(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Path != "/" {
+		http.NotFound(writer, request)
+		return
+	}
+
+	http.Redirect(writer, request, "/pair", http.StatusTemporaryRedirect)
+}
+
 func (a *Application) handleHealth(writer http.ResponseWriter, _ *http.Request) {
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"status":     "ok",
@@ -121,15 +132,25 @@ func (a *Application) handleHealth(writer http.ResponseWriter, _ *http.Request) 
 }
 
 func (a *Application) handleMeta(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"app_name":       a.config.AppName,
 		"device_name":    a.config.DeviceName,
+		"host":           a.config.PublicHost,
 		"public_host":    a.config.PublicHost,
 		"port":           a.config.Port,
 		"websocket_path": a.config.WebSocketPath,
 		"service_type":   a.config.ServiceType,
 		"discovery":      a.discovery.Descriptor(),
-	})
+	}
+	if wakeTarget := a.executor.WakeTarget(); wakeTarget.Valid() {
+		payload["wake_target"] = map[string]any{
+			"mac":       wakeTarget.MAC,
+			"broadcast": wakeTarget.Broadcast,
+			"port":      wakeTarget.Port,
+		}
+	}
+
+	writeJSON(writer, http.StatusOK, payload)
 }
 
 func (a *Application) handlePlugins(writer http.ResponseWriter, _ *http.Request) {
@@ -380,12 +401,16 @@ func (a *Application) handlePairingPage(writer http.ResponseWriter, request *htt
 }
 
 func (a *Application) newPairingSession() (pairing.Session, error) {
+	wakeTarget := a.executor.WakeTarget()
 	return a.pairing.CreateSession(
 		a.config.PublicHost,
 		a.config.Port,
 		a.config.DeviceName,
 		a.config.ServiceType,
 		a.config.WebSocketPath,
+		wakeTarget.MAC,
+		wakeTarget.Broadcast,
+		wakeTarget.Port,
 	)
 }
 

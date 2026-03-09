@@ -10,6 +10,7 @@ class PairingPayload {
     required this.deviceName,
     required this.serviceType,
     required this.websocketPath,
+    this.wakeTarget,
   });
 
   final String host;
@@ -18,6 +19,7 @@ class PairingPayload {
   final String deviceName;
   final String serviceType;
   final String websocketPath;
+  final WakeTarget? wakeTarget;
 
   factory PairingPayload.fromUri(String rawUri) {
     final uri = Uri.parse(rawUri.trim());
@@ -32,6 +34,13 @@ class PairingPayload {
 
     final decoded = base64Url.decode(base64Url.normalize(encoded));
     final payload = jsonDecode(utf8.decode(decoded)) as Map<String, dynamic>;
+    WakeTarget? wakeTarget;
+    if (payload['wake_mac'] != null || payload['wake_broadcast'] != null) {
+      final parsed = WakeTarget.fromJson(payload);
+      if (parsed.isConfigured) {
+        wakeTarget = parsed;
+      }
+    }
 
     return PairingPayload(
       host: payload['host'] as String? ?? '127.0.0.1',
@@ -40,6 +49,7 @@ class PairingPayload {
       deviceName: payload['device'] as String? ?? 'OpenRemote Agent',
       serviceType: payload['service'] as String? ?? '_openremote._tcp',
       websocketPath: payload['ws_path'] as String? ?? '/ws',
+      wakeTarget: wakeTarget,
     );
   }
 
@@ -52,6 +62,7 @@ class PairingPayload {
       serviceType: serviceType,
       accessToken: accessToken,
       websocketPath: websocketPath,
+      wakeTarget: wakeTarget,
     );
   }
 }
