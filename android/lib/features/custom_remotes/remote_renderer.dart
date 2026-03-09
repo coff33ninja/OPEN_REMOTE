@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/command.dart';
 import '../../core/models/remote_layout.dart';
 import '../../ui/widgets/remote_button.dart';
+import '../../ui/widgets/touchpad_surface.dart';
 
 class CustomRemoteScreen extends StatelessWidget {
   const CustomRemoteScreen({
@@ -353,6 +354,71 @@ CommandEnvelope commandFromBinding({
   );
 }
 
+CommandEnvelope _touchpadCommand(
+  String remoteId,
+  RemoteControl control, {
+  required String commandKey,
+  required String fallbackCommand,
+  Map<String, dynamic> defaultProps = const <String, dynamic>{},
+  Map<String, dynamic> overrides = const <String, dynamic>{},
+}) {
+  return commandFromBinding(
+    remoteId: remoteId,
+    commandName: _stringProp(control.props[commandKey]) ?? fallbackCommand,
+    props: <String, dynamic>{
+      ...defaultProps,
+      ..._mapProp(control.props['${commandKey}_props']),
+    },
+    overrides: overrides,
+  );
+}
+
+bool _boolProp(Map<String, dynamic> props, String key, bool fallback) {
+  final value = props[key];
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    if (value.toLowerCase() == 'true') {
+      return true;
+    }
+    if (value.toLowerCase() == 'false') {
+      return false;
+    }
+  }
+  return fallback;
+}
+
+double _doubleProp(Map<String, dynamic> props, String key, double fallback) {
+  final value = props[key];
+  if (value is num) {
+    return value.toDouble();
+  }
+  if (value is String) {
+    return double.tryParse(value) ?? fallback;
+  }
+  return fallback;
+}
+
+String? _stringProp(dynamic value) {
+  if (value is String && value.trim().isNotEmpty) {
+    return value.trim();
+  }
+  return null;
+}
+
+Map<String, dynamic> _mapProp(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map(
+      (dynamic key, dynamic item) => MapEntry('$key', item),
+    );
+  }
+  return const <String, dynamic>{};
+}
+
 class _SliderControl extends StatefulWidget {
   const _SliderControl({
     required this.enabled,
@@ -517,30 +583,68 @@ class _TouchpadControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = GestureDetector(
-      onPanUpdate: enabled
-          ? (DragUpdateDetails details) {
-              onSend(
-                CommandEnvelope(
-                  type: 'mouse',
-                  action: 'move',
-                  name: control.command,
-                  remoteId: remoteId,
-                  arguments: <String, dynamic>{
-                    'dx': details.delta.dx.round(),
-                    'dy': details.delta.dy.round(),
-                  },
-                ),
-              );
-            }
-          : null,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0xFFE2E8F0),
-          borderRadius: BorderRadius.circular(20),
+    final child = TouchpadSurface(
+      enabled: enabled,
+      label: control.label ?? 'Touchpad',
+      sensitivity: _doubleProp(control.props, 'sensitivity', 1.0),
+      showScrollRail: _boolProp(control.props, 'show_scroll_rail', !canvasMode),
+      showHints: !canvasMode,
+      onMove: (Offset delta) => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'move_command',
+          fallbackCommand:
+              control.command.isEmpty ? 'mouse_move' : control.command,
+          overrides: <String, dynamic>{
+            'dx': delta.dx.round(),
+            'dy': delta.dy.round(),
+          },
         ),
-        child: Center(
-          child: Text(control.label ?? 'Touchpad'),
+      ),
+      onTap: () => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'tap_command',
+          fallbackCommand: 'mouse_click',
+          defaultProps: const <String, dynamic>{'button': 'left'},
+        ),
+      ),
+      onDoubleTap: () => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'double_tap_command',
+          fallbackCommand: 'mouse_double_click',
+          defaultProps: const <String, dynamic>{'button': 'left'},
+        ),
+      ),
+      onScroll: (int verticalSteps) => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'scroll_command',
+          fallbackCommand: 'mouse_scroll',
+          overrides: <String, dynamic>{'vertical': verticalSteps},
+        ),
+      ),
+      onButtonDown: (String button) => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'button_down_command',
+          fallbackCommand: 'mouse_button_down',
+          defaultProps: <String, dynamic>{'button': button},
+        ),
+      ),
+      onButtonUp: (String button) => onSend(
+        _touchpadCommand(
+          remoteId,
+          control,
+          commandKey: 'button_up_command',
+          fallbackCommand: 'mouse_button_up',
+          defaultProps: <String, dynamic>{'button': button},
         ),
       ),
     );

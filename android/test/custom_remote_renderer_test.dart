@@ -105,4 +105,45 @@ void main() {
     expect(sent[1].commandName, 'volume_set');
     expect(sent[1].arguments['value'], 0);
   });
+
+  testWidgets('CustomRemoteScreen touchpad supports tap click',
+      (WidgetTester tester) async {
+    final sent = <CommandEnvelope>[];
+    final remote = RemoteLayout.fromJson(<String, dynamic>{
+      'id': 'mouse-touchpad',
+      'name': 'Mouse Touchpad',
+      'category': 'input',
+      'layout': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'touchpad',
+          'type': 'touchpad',
+          'label': 'Touchpad',
+          'command': 'mouse_move',
+        },
+      ],
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CustomRemoteScreen(
+            enabled: true,
+            remotes: <RemoteLayout>[remote],
+            favoriteRemoteIds: const <String>{},
+            onSend: (CommandEnvelope command) async {
+              sent.add(command);
+            },
+            onToggleFavoriteRemote: (RemoteLayout remote) async {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Touchpad'));
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(sent, hasLength(1));
+    expect(sent.first.commandName, 'mouse_click');
+    expect(sent.first.arguments['button'], 'left');
+  });
 }

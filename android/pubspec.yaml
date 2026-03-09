@@ -2,7 +2,7 @@ name: openremote_android
 description: OpenRemote Android client
 publish_to: none
 
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

@@ -22,6 +22,9 @@ const (
 	mouseeventfRightUp    = 0x0010
 	mouseeventfMiddleDown = 0x0020
 	mouseeventfMiddleUp   = 0x0040
+	mouseeventfWheel      = 0x0800
+
+	wheelDelta = 120
 
 	vkLeft           = 0x25
 	vkRight          = 0x27
@@ -90,6 +93,26 @@ func setCursorPosition(x int32, y int32) error {
 func sendMouseClick(downFlag uintptr, upFlag uintptr) error {
 	procMouseEvent.Call(downFlag, 0, 0, 0, 0)
 	procMouseEvent.Call(upFlag, 0, 0, 0, 0)
+	return nil
+}
+
+func sendMouseButton(flag uintptr) error {
+	procMouseEvent.Call(flag, 0, 0, 0, 0)
+	return nil
+}
+
+func sendMouseWheel(vertical int32) error {
+	if vertical == 0 {
+		return nil
+	}
+
+	procMouseEvent.Call(
+		mouseeventfWheel,
+		0,
+		0,
+		uintptr(uint32(vertical)),
+		0,
+	)
 	return nil
 }
 
