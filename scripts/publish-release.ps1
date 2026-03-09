@@ -119,28 +119,16 @@ function Test-ReleaseExists {
     [string]$RepoRoot
   )
 
-  $captureId = [guid]::NewGuid().ToString('N')
-  $stdoutPath = Join-Path $env:TEMP "openremote-gh-release-$captureId.out"
-  $stderrPath = Join-Path $env:TEMP "openremote-gh-release-$captureId.err"
-
+  Push-Location $RepoRoot
   try {
-    $process = Start-Process `
-      -FilePath $GhPath `
-      -ArgumentList @('release', 'view', $Tag, '--json', 'url') `
-      -WorkingDirectory $RepoRoot `
-      -NoNewWindow `
-      -PassThru `
-      -Wait `
-      -RedirectStandardOutput $stdoutPath `
-      -RedirectStandardError $stderrPath
-
-    return $process.ExitCode -eq 0
-  } finally {
-    foreach ($capturePath in @($stdoutPath, $stderrPath)) {
-      if (Test-Path $capturePath) {
-        Remove-Item -Force -WhatIf:$false $capturePath
-      }
+    try {
+      & $GhPath release view $Tag --json url *> $null
+      return $LASTEXITCODE -eq 0
+    } catch {
+      return $false
     }
+  } finally {
+    Pop-Location
   }
 }
 
