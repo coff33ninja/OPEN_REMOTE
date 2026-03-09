@@ -167,7 +167,12 @@ if (-not $PSCmdlet.ShouldProcess("GitHub release $Tag", 'push tag and publish re
   return
 }
 
-$localTag = (& $git -C $repoRoot tag --list $Tag).Trim()
+$localTagOutput = & $git -C $repoRoot tag --list $Tag
+$localTag = if ($null -eq $localTagOutput) {
+  ''
+} else {
+  ($localTagOutput | Out-String).Trim()
+}
 if ($localTag -ne $Tag) {
   Write-Host "Creating local tag $Tag at $Target"
   Invoke-External -FilePath $git -ArgumentList @('-C', $repoRoot, 'tag', $Tag, $Target)
