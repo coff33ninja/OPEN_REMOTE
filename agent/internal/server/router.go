@@ -25,17 +25,19 @@ import (
 )
 
 type Application struct {
-	logger     *log.Logger
-	config     config.Config
-	registry   *plugins.Registry
-	pairing    *pairing.Manager
-	authorizer *Authorizer
-	discovery  *discovery.Service
-	executor   *system.Executor
+	logger       *log.Logger
+	clientLogger *log.Logger
+	config       config.Config
+	registry     *plugins.Registry
+	pairing      *pairing.Manager
+	authorizer   *Authorizer
+	discovery    *discovery.Service
+	executor     *system.Executor
 }
 
 func NewApplication(
 	logger *log.Logger,
+	clientLogger *log.Logger,
 	cfg config.Config,
 	registry *plugins.Registry,
 	pairingManager *pairing.Manager,
@@ -43,14 +45,18 @@ func NewApplication(
 	discoveryService *discovery.Service,
 	executor *system.Executor,
 ) *Application {
+	if clientLogger == nil {
+		clientLogger = logger
+	}
 	return &Application{
-		logger:     logger,
-		config:     cfg,
-		registry:   registry,
-		pairing:    pairingManager,
-		authorizer: authorizer,
-		discovery:  discoveryService,
-		executor:   executor,
+		logger:       logger,
+		clientLogger: clientLogger,
+		config:       cfg,
+		registry:     registry,
+		pairing:      pairingManager,
+		authorizer:   authorizer,
+		discovery:    discoveryService,
+		executor:     executor,
 	}
 }
 
@@ -119,6 +125,7 @@ func (a *Application) routes() http.Handler {
 	mux.HandleFunc("/api/v1/services/stop", a.handleServiceStop)
 	mux.HandleFunc("/api/v1/services/restart", a.handleServiceRestart)
 	mux.HandleFunc("/api/v1/system/info", a.handleSystemInfo)
+	mux.HandleFunc("/api/v1/logs/client", a.handleClientLogs)
 	mux.HandleFunc("/api/v1/commands", a.handleCommands)
 	mux.HandleFunc(a.config.WebSocketPath, a.handleWebSocket)
 

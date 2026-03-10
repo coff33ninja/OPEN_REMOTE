@@ -455,6 +455,7 @@ func newTestApplication(t *testing.T) (*Application, *pairing.Manager) {
 
 	return NewApplication(
 		logger,
+		log.New(io.Discard, "", 0),
 		cfg,
 		registry,
 		pairManager,

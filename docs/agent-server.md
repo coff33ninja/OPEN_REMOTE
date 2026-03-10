@@ -49,8 +49,14 @@ agent/
 - `GET /api/v1/services`: list Windows services and status metadata.
 - `POST /api/v1/services/start|stop|restart`: control a Windows service by name.
 - `GET /api/v1/system/info`: snapshot CPU, memory, GPU, disk, and thermal telemetry.
+- `POST /api/v1/logs/client`: accept client error logs (requires bearer token).
 - `POST /api/v1/commands`: authenticated command submission.
 - `GET /ws`: authenticated WebSocket command transport.
+
+Agent log files live under `data/logs/` by default:
+
+- `agent.log`: agent/server logs.
+- `client.log`: Android client error reports.
 
 ## System Telemetry Sources
 

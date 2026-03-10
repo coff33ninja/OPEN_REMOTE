@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/agent_data.dart';
@@ -25,6 +27,28 @@ class _ServicesScreenState extends State<ServicesScreen> {
   List<AgentService> _services = const <AgentService>[];
   String _status = 'Connect to an agent to view services.';
   String _filter = '';
+
+  void _reportError(
+    Object error, {
+    String? action,
+    Map<String, dynamic>? context,
+  }) {
+    final device = widget.device;
+    if (device == null) {
+      return;
+    }
+    unawaited(
+      widget.apiClient.reportClientLog(
+        device,
+        level: 'error',
+        message: action == null ? 'services error' : 'services error: $action',
+        error: error,
+        screen: 'services',
+        action: action,
+        context: context,
+      ),
+    );
+  }
 
   @override
   void didUpdateWidget(covariant ServicesScreen oldWidget) {
@@ -61,6 +85,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
       setState(() {
         _status = 'Service list failed';
       });
+      _reportError(error, action: 'list');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Services failed: $error')),
       );
@@ -108,6 +133,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(
+        error,
+        action: 'service_action',
+        context: <String, dynamic>{'service': service.name},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Action failed: $error')),
       );

@@ -31,6 +31,23 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
   String? _error;
   AgentSystemSnapshot? _snapshot;
 
+  void _reportError(Object error) {
+    final device = widget.device;
+    if (device == null) {
+      return;
+    }
+    unawaited(
+      widget.apiClient.reportClientLog(
+        device,
+        level: 'error',
+        message: 'system info error',
+        error: error,
+        screen: 'system_info',
+        action: 'refresh',
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +123,7 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(error);
       setState(() {
         _status = 'System info failed';
         _error = 'System info failed: $error';

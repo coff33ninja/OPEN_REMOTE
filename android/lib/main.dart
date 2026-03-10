@@ -95,6 +95,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   late final VoidCallback _connectionListener;
   Timer? _reconnectTimer;
   DateTime? _lastReconnectAttempt;
+  Object? _lastConnectionError;
   static const Duration _reconnectInterval = Duration(seconds: 20);
 
   List<Device> _devices = const <Device>[];
@@ -122,9 +123,23 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       if (!mounted) {
         return;
       }
+      if (_client.connectionState.value == RemoteConnectionState.error) {
+        final error = _client.lastError;
+        if (error != null && error != _lastConnectionError) {
+          _lastConnectionError = error;
+          unawaited(
+            _reportClientError(
+              error,
+              screen: 'websocket',
+              action: 'connection',
+            ),
+          );
+        }
+      }
       setState(() {});
     };
     _client.connectionState.addListener(_connectionListener);
+    _attachGlobalErrorHandlers();
     _startReconnectLoop();
     _bootstrap();
   }
@@ -158,6 +173,33 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _lastReconnectAttempt = now;
       unawaited(_connectToDevice(device, announceRestore: false));
     });
+  }
+
+  void _attachGlobalErrorHandlers() {
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      unawaited(
+        _reportClientError(
+          details.exception,
+          stack: details.stack,
+          screen: 'flutter',
+          action: 'uncaught',
+        ),
+      );
+    };
+
+    WidgetsBinding.instance.platformDispatcher.onError =
+        (Object error, StackTrace stack) {
+      unawaited(
+        _reportClientError(
+          error,
+          stack: stack,
+          screen: 'platform',
+          action: 'uncaught',
+        ),
+      );
+      return true;
+    };
   }
 
   Future<void> _bootstrap() async {
@@ -342,6 +384,17 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         _status = 'Connection failed';
       });
 
+      unawaited(
+        _reportClientError(
+          error,
+          screen: 'connect',
+          action: 'connect',
+          context: <String, dynamic>{
+            'device_id': device.id,
+            'route_host': failedRouteHost ?? device.host,
+          },
+        ),
+      );
       await _persistState();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not connect: $error')),
@@ -392,6 +445,14 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         _status = 'Wake failed';
       });
 
+      unawaited(
+        _reportClientError(
+          error,
+          screen: 'power',
+          action: 'wake',
+          context: <String, dynamic>{'device_id': device.id},
+        ),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Wake failed: $error')),
       );
@@ -451,6 +512,13 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         _status = 'Pairing failed';
       });
 
+      unawaited(
+        _reportClientError(
+          error,
+          screen: 'pairing',
+          action: 'pair',
+        ),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Pairing failed: $error')),
       );
@@ -759,6 +827,13 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         _status = 'Refresh failed';
       });
 
+      unawaited(
+        _reportClientError(
+          error,
+          screen: 'discovery',
+          action: 'refresh',
+        ),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Discovery refresh failed: $error')),
       );
@@ -829,6 +904,13 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       setState(() {
         _status = 'Share intake failed';
       });
+      unawaited(
+        _reportClientError(
+          error,
+          screen: 'sharing',
+          action: 'receive',
+        ),
+      );
     });
 
     final initialMedia = await ReceiveSharingIntent.instance.getInitialMedia();
@@ -891,8 +973,22 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           bytes: payload.bytes,
         );
         uploadedCount++;
-      } catch (_) {
+      } catch (error) {
         remaining.add(item);
+        unawaited(
+          _reportClientError(
+            error,
+            screen: 'files',
+            action: 'upload_shared',
+            context: <String, dynamic>{
+              'file_name': item.path.trim().isEmpty
+                  ? item.type.value
+                  : path.basename(item.path),
+              'file_path': item.path,
+              'file_type': item.type.value,
+            },
+          ),
+        );
       }
     }
 
@@ -1217,10 +1313,41 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         _status = 'Send failed';
       });
 
+      unawaited(
+        _reportClientError(
+          error,
+          screen: 'commands',
+          action: command.commandName,
+        ),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Command failed: $error')),
       );
     }
+  }
+
+  Future<void> _reportClientError(
+    Object error, {
+    StackTrace? stack,
+    String? screen,
+    String? action,
+    Map<String, dynamic>? context,
+  }) async {
+    final device = _selectedDevice;
+    if (device == null) {
+      return;
+    }
+
+    await _apiClient.reportClientLog(
+      device,
+      level: 'error',
+      message: action == null ? 'client error' : 'client error: $action',
+      error: error,
+      stack: stack,
+      screen: screen,
+      action: action,
+      context: context,
+    );
   }
 
   @override

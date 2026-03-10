@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"openremote/agent/internal/plugins"
@@ -13,6 +14,12 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+
+const (
+	writeWait  = 10 * time.Second
+	pongWait   = 45 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+)
 
 func (a *Application) handleWebSocket(writer http.ResponseWriter, request *http.Request) {
 	device, ok := a.authorizer.AuthenticateWebSocket(request)
@@ -30,7 +37,31 @@ func (a *Application) handleWebSocket(writer http.ResponseWriter, request *http.
 	}
 	defer conn.Close()
 
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	a.logger.Printf("websocket connected device=%s", device.Name)
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+	defer close(done)
 
 	for {
 		var command plugins.Command
@@ -40,6 +71,7 @@ func (a *Application) handleWebSocket(writer http.ResponseWriter, request *http.
 			}
 			return
 		}
+		conn.SetReadDeadline(time.Now().Add(pongWait))
 
 		if command.Type == "" && command.Name == "" {
 			_ = conn.WriteJSON(map[string]any{

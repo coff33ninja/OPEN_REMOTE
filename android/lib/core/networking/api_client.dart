@@ -556,6 +556,59 @@ class ApiClient {
     }
   }
 
+  Future<void> reportClientLog(
+    Device device, {
+    required String level,
+    required String message,
+    Object? error,
+    StackTrace? stack,
+    String? screen,
+    String? action,
+    Map<String, dynamic>? context,
+  }) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      return;
+    }
+
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.postUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: '/api/v1/logs/client',
+        ),
+      );
+      request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.write(
+        jsonEncode(
+          <String, dynamic>{
+            'level': level,
+            'message': message,
+            if (error != null) 'error': error.toString(),
+            if (stack != null) 'stack': stack.toString(),
+            if (screen != null) 'screen': screen,
+            if (action != null) 'action': action,
+            if (context != null && context.isNotEmpty) 'context': context,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'device_id': device.id,
+            'device_name': device.name,
+          },
+        ),
+      );
+
+      final response = await request.close();
+      await response.drain();
+    } catch (_) {
+      // Swallow log reporting errors to avoid feedback loops.
+    } finally {
+      httpClient.close();
+    }
+  }
+
   Future<void> _postFilesystemAction(
     Device device, {
     required String path,

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -26,12 +27,36 @@ import (
 )
 
 func main() {
-	logger := log.New(os.Stdout, "openremote-agent ", log.LstdFlags)
-
 	cfg, err := config.Load()
 	if err != nil {
+		logger := log.New(os.Stdout, "openremote-agent ", log.LstdFlags)
 		logger.Fatal(err)
 	}
+
+	logDir := filepath.Join(cfg.DataDir, "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		logger := log.New(os.Stdout, "openremote-agent ", log.LstdFlags)
+		logger.Fatal(err)
+	}
+
+	agentLogPath := filepath.Join(logDir, "agent.log")
+	agentLogFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		logger := log.New(os.Stdout, "openremote-agent ", log.LstdFlags)
+		logger.Fatalf("open agent log failed: %v", err)
+	}
+	defer agentLogFile.Close()
+
+	clientLogPath := filepath.Join(logDir, "client.log")
+	clientLogFile, err := os.OpenFile(clientLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		logger := log.New(os.Stdout, "openremote-agent ", log.LstdFlags)
+		logger.Fatalf("open client log failed: %v", err)
+	}
+	defer clientLogFile.Close()
+
+	logger := log.New(io.MultiWriter(os.Stdout, agentLogFile), "openremote-agent ", log.LstdFlags)
+	clientLogger := log.New(clientLogFile, "openremote-client ", log.LstdFlags)
 
 	executor := system.NewExecutor(logger)
 	executor.ConfigureWakeTarget(cfg.PublicHost, system.WakeTarget{
@@ -64,7 +89,16 @@ func main() {
 	}
 
 	discoveryService := discovery.NewService(cfg, logger, executor.WakeTarget())
-	application := server.NewApplication(logger, cfg, registry, pairingManager, authorizer, discoveryService, executor)
+	application := server.NewApplication(
+		logger,
+		clientLogger,
+		cfg,
+		registry,
+		pairingManager,
+		authorizer,
+		discoveryService,
+		executor,
+	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

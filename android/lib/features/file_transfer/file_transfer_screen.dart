@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -30,6 +31,30 @@ class FileTransferScreen extends StatefulWidget {
 class _FileTransferScreenState extends State<FileTransferScreen> {
   bool _uploading = false;
   String _status = 'Pick a file to send it to the connected agent.';
+
+  void _reportError(
+    Object error, {
+    String? action,
+    Map<String, dynamic>? context,
+  }) {
+    final device = widget.device;
+    if (device == null) {
+      return;
+    }
+    unawaited(
+      widget.apiClient.reportClientLog(
+        device,
+        level: 'error',
+        message: action == null
+            ? 'file transfer error'
+            : 'file transfer error: $action',
+        error: error,
+        screen: 'file_transfer',
+        action: action,
+        context: context,
+      ),
+    );
+  }
 
   Future<void> _pickAndUpload() async {
     final device = widget.device;
@@ -84,6 +109,11 @@ class _FileTransferScreenState extends State<FileTransferScreen> {
       setState(() {
         _status = 'Upload failed';
       });
+      _reportError(
+        error,
+        action: 'upload',
+        context: <String, dynamic>{'file_name': selected.name},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Upload failed: $error')),
       );

@@ -117,6 +117,30 @@ class _FileExplorerScreenState extends State<FileExplorerScreen> {
 
   String? get _parentPath => _resolveParentPath(_path);
 
+  void _reportError(
+    Object error, {
+    String? action,
+    Map<String, dynamic>? context,
+  }) {
+    final device = widget.device;
+    if (device == null) {
+      return;
+    }
+    unawaited(
+      widget.apiClient.reportClientLog(
+        device,
+        level: 'error',
+        message: action == null
+            ? 'file explorer error'
+            : 'file explorer error: $action',
+        error: error,
+        screen: 'file_explorer',
+        action: action,
+        context: context,
+      ),
+    );
+  }
+
   Future<void> _load([String? nextPath]) async {
     final device = widget.device;
     if (!widget.enabled || device == null) {
@@ -149,6 +173,11 @@ class _FileExplorerScreenState extends State<FileExplorerScreen> {
       setState(() {
         _status = 'Browse failed';
       });
+      _reportError(
+        error,
+        action: 'browse',
+        context: <String, dynamic>{'path': targetPath},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('File explorer failed: $error')),
       );
@@ -196,6 +225,11 @@ class _FileExplorerScreenState extends State<FileExplorerScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(
+        error,
+        action: 'entry_action',
+        context: <String, dynamic>{'path': entry.path},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString())),
       );
@@ -247,6 +281,14 @@ class _FileExplorerScreenState extends State<FileExplorerScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(
+        error,
+        action: 'create_folder',
+        context: <String, dynamic>{
+          'path': _path,
+          'name': folderName,
+        },
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Create folder failed: $error')),
       );
@@ -310,6 +352,14 @@ class _FileExplorerScreenState extends State<FileExplorerScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(
+        error,
+        action: 'upload',
+        context: <String, dynamic>{
+          'path': _path,
+          'file_name': selected.name,
+        },
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Upload failed: $error')),
       );
@@ -500,6 +550,14 @@ class _FileExplorerScreenState extends State<FileExplorerScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(
+        error,
+        action: 'download',
+        context: <String, dynamic>{
+          'path': entry.path,
+          'file_name': entry.name,
+        },
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Download failed: $error')),
       );

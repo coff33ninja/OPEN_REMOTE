@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/agent_data.dart';
@@ -24,6 +26,30 @@ class _TaskManagerScreenState extends State<TaskManagerScreen> {
   bool _loading = false;
   List<AgentProcess> _processes = const <AgentProcess>[];
   String _status = 'Connect to an agent to view processes.';
+
+  void _reportError(
+    Object error, {
+    String? action,
+    Map<String, dynamic>? context,
+  }) {
+    final device = widget.device;
+    if (device == null) {
+      return;
+    }
+    unawaited(
+      widget.apiClient.reportClientLog(
+        device,
+        level: 'error',
+        message: action == null
+            ? 'task manager error'
+            : 'task manager error: $action',
+        error: error,
+        screen: 'task_manager',
+        action: action,
+        context: context,
+      ),
+    );
+  }
 
   @override
   void didUpdateWidget(covariant TaskManagerScreen oldWidget) {
@@ -60,6 +86,7 @@ class _TaskManagerScreenState extends State<TaskManagerScreen> {
       setState(() {
         _status = 'Process list failed';
       });
+      _reportError(error, action: 'list');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Task manager failed: $error')),
       );
@@ -116,6 +143,14 @@ class _TaskManagerScreenState extends State<TaskManagerScreen> {
       if (!mounted) {
         return;
       }
+      _reportError(
+        error,
+        action: 'terminate',
+        context: <String, dynamic>{
+          'pid': process.pid,
+          'name': process.name,
+        },
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Terminate failed: $error')),
       );
