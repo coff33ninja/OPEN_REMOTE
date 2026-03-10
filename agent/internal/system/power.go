@@ -6,7 +6,7 @@ import "fmt"
 
 func (e *Executor) PowerAction(action string) error {
 	switch action {
-	case "sleep", "shutdown":
+	case "sleep", "shutdown", "restart":
 		e.logger.Printf("power action=%s", action)
 		return nil
 	default:

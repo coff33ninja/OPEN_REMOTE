@@ -15,6 +15,8 @@ func (e *Executor) PowerAction(action string) error {
 		command = exec.Command("rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0")
 	case "shutdown":
 		command = exec.Command("shutdown.exe", "/s", "/t", "0")
+	case "restart":
+		command = exec.Command("shutdown.exe", "/r", "/t", "0")
 	default:
 		return fmt.Errorf("unsupported power action %q", action)
 	}

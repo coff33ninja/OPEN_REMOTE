@@ -30,13 +30,13 @@ func (p *Plugin) Manifest() internalplugins.Manifest {
 		Name:        p.Name(),
 		Category:    "system",
 		Description: "Power management commands",
-		Commands:    []string{"power_wake", "power_sleep", "power_shutdown"},
+		Commands:    []string{"power_wake", "power_sleep", "power_shutdown", "power_restart"},
 	}
 }
 
 func (p *Plugin) Supports(command internalplugins.Command) bool {
 	switch command.CommandName() {
-	case "power_wake", "power_sleep", "power_shutdown":
+	case "power_wake", "power_sleep", "power_shutdown", "power_restart":
 		return true
 	default:
 		return false
@@ -55,6 +55,8 @@ func (p *Plugin) Execute(_ context.Context, command internalplugins.Command) err
 		return p.executor.PowerAction("sleep")
 	case "power_shutdown":
 		return p.executor.PowerAction("shutdown")
+	case "power_restart":
+		return p.executor.PowerAction("restart")
 	default:
 		return fmt.Errorf("unsupported power command %q", command.CommandName())
 	}

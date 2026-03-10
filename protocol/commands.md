@@ -43,6 +43,7 @@
 - `power_wake`: optional `mac`, `broadcast`, `port`
 - `power_sleep`
 - `power_shutdown`
+- `power_restart`
 
 `power_wake` is special:
 

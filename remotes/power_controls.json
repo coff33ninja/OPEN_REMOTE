@@ -20,6 +20,12 @@
       "type": "button",
       "label": "Shutdown PC",
       "command": "power_shutdown"
+    },
+    {
+      "id": "restart-pc",
+      "type": "button",
+      "label": "Restart PC",
+      "command": "power_restart"
     }
   ]
 }
