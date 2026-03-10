@@ -12,6 +12,7 @@ import 'core/models/remote_layout.dart';
 import 'core/networking/api_client.dart';
 import 'core/networking/device_connection_resolver.dart';
 import 'core/networking/discovery.dart';
+import 'core/networking/github_updates_service.dart';
 import 'core/networking/pairing_host_resolver.dart';
 import 'core/networking/wake_on_lan_client.dart';
 import 'core/networking/websocket_client.dart';
@@ -27,6 +28,7 @@ import 'features/media_remote/media_screen.dart';
 import 'features/mouse_remote/mouse_screen.dart';
 import 'features/remote_designer/remote_designer_screen.dart';
 import 'features/task_manager/task_manager_screen.dart';
+import 'features/updates/updates_screen.dart';
 import 'ui/themes/app_theme.dart';
 import 'ui/widgets/network_route_icons.dart';
 
@@ -43,6 +45,7 @@ enum _AppSection {
   explorer('Explorer', Icons.folder_open_outlined),
   tasks('Tasks', Icons.checklist_outlined),
   files('Files', Icons.upload_file_outlined),
+  updates('Updates', Icons.system_update_alt_outlined),
   custom('Custom Remotes', Icons.tune_outlined),
   designer('Designer', Icons.draw_outlined);
 
@@ -80,6 +83,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   final RemoteLoader _remoteLoader = const RemoteLoader();
   final AppStateStore _appStateStore = const AppStateStore();
   final WakeOnLanClient _wakeOnLanClient = const WakeOnLanClient();
+  final GitHubUpdatesService _updatesService = GitHubUpdatesService();
 
   List<Device> _devices = const <Device>[];
   List<RemoteLayout> _remotes = const <RemoteLayout>[];
@@ -1109,6 +1113,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         pendingSharedCount: _pendingSharedFiles.length,
         onUploadPendingShares: _flushPendingShares,
       ),
+      UpdatesScreen(
+        service: _updatesService,
+      ),
       CustomRemoteScreen(
         enabled: _selectedDevice != null,
         remotes: orderedRemotes,
@@ -1305,6 +1312,14 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                             onTap: () {
                               Navigator.of(context).pop();
                               _setSection(_AppSection.files);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.updates,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.updates);
                             },
                           ),
                           _DrawerItem(
