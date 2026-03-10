@@ -1,25 +1,63 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/updates_config.dart';
 import '../models/update_feed.dart';
 
 class GitHubUpdatesService {
   GitHubUpdatesService({
-    this.owner = 'coff33ninja',
-    this.repo = 'OPEN_REMOTE',
     this.cacheKey = 'updates_cache_v1',
+    this.configKey = 'updates_config_override_v1',
     this.cacheTtl = const Duration(hours: 6),
   });
 
-  final String owner;
-  final String repo;
   final String cacheKey;
+  final String configKey;
   final Duration cacheTtl;
+
+  Future<UpdatesConfig> loadConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final override = prefs.getString(configKey);
+    if (override != null && override.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(override) as Map<String, dynamic>;
+        return UpdatesConfig.fromJson(decoded);
+      } catch (_) {}
+    }
+
+    final assetConfig = await _loadAssetConfig();
+    if (assetConfig != null) {
+      return assetConfig;
+    }
+
+    return const UpdatesConfig(
+      owner: 'coff33ninja',
+      repo: 'OPEN_REMOTE',
+      releasesUrl:
+          'https://api.github.com/repos/coff33ninja/OPEN_REMOTE/releases',
+      commitsUrl:
+          'https://api.github.com/repos/coff33ninja/OPEN_REMOTE/commits',
+      releasesPage: 'https://github.com/coff33ninja/OPEN_REMOTE/releases',
+      commitsPage: 'https://github.com/coff33ninja/OPEN_REMOTE/commits/main',
+    );
+  }
+
+  Future<void> saveConfigOverride(String rawJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(configKey, rawJson);
+  }
+
+  Future<void> clearConfigOverride() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(configKey);
+  }
 
   Future<UpdateFeed> fetchUpdates({bool forceRefresh = false}) async {
     final prefs = await SharedPreferences.getInstance();
+    final config = await loadConfig();
     final cached = _loadCache(prefs);
     final now = DateTime.now().toUtc();
 
@@ -30,7 +68,7 @@ class GitHubUpdatesService {
     }
 
     try {
-      final remote = await _fetchRemote();
+      final remote = await _fetchRemote(config);
       await _saveCache(prefs, remote);
       return remote;
     } catch (error) {
@@ -62,14 +100,14 @@ class GitHubUpdatesService {
     await prefs.setString(cacheKey, jsonEncode(feed.toJson()));
   }
 
-  Future<UpdateFeed> _fetchRemote() async {
+  Future<UpdateFeed> _fetchRemote(UpdatesConfig config) async {
     final client = HttpClient();
     try {
-      final releasesUri = Uri.parse(
-        'https://api.github.com/repos/$owner/$repo/releases?per_page=10',
+      final releasesUri = Uri.parse(config.releasesUrl).replace(
+        queryParameters: <String, String>{'per_page': '10'},
       );
-      final commitsUri = Uri.parse(
-        'https://api.github.com/repos/$owner/$repo/commits?per_page=20',
+      final commitsUri = Uri.parse(config.commitsUrl).replace(
+        queryParameters: <String, String>{'per_page': '20'},
       );
 
       final releasesFuture = _getJson(client, releasesUri);
@@ -140,5 +178,17 @@ class GitHubUpdatesService {
         url: json['html_url'] as String? ?? '',
       );
     }).toList(growable: false);
+  }
+
+  Future<UpdatesConfig?> _loadAssetConfig() async {
+    try {
+      final raw = await rootBundle.loadString(
+        'assets/openremote_updates.json',
+      );
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return UpdatesConfig.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
   }
 }

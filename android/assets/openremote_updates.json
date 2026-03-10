@@ -1,0 +1,14 @@
+{
+  "repo": {
+    "owner": "coff33ninja",
+    "name": "OPEN_REMOTE"
+  },
+  "links": {
+    "releases": "https://github.com/coff33ninja/OPEN_REMOTE/releases",
+    "commits": "https://github.com/coff33ninja/OPEN_REMOTE/commits/main"
+  },
+  "versions": {
+    "android": "0.1.6+7",
+    "agent": "0.1.6"
+  }
+}

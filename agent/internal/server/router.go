@@ -21,6 +21,7 @@ import (
 	"openremote/agent/internal/pairing"
 	"openremote/agent/internal/plugins"
 	"openremote/agent/internal/system"
+	"openremote/agent/internal/updates"
 )
 
 type Application struct {
@@ -158,6 +159,9 @@ func (a *Application) handleMeta(writer http.ResponseWriter, _ *http.Request) {
 			"broadcast": wakeTarget.Broadcast,
 			"port":      wakeTarget.Port,
 		}
+	}
+	if cfg, err := updates.Load(); err == nil && cfg != nil {
+		payload["updates"] = cfg
 	}
 
 	writeJSON(writer, http.StatusOK, payload)
