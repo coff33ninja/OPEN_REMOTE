@@ -60,6 +60,7 @@ func (a *Application) ListenAndServe(ctx context.Context) error {
 			a.logger.Printf("discovery error: %v", err)
 		}
 	}()
+	go a.executor.StartServiceMonitor(ctx, 15*time.Second)
 
 	server := &http.Server{
 		Addr:              net.JoinHostPort(a.config.ListenAddress, strconv.Itoa(a.config.Port)),
@@ -1052,6 +1053,20 @@ func (a *Application) handleServices(writer http.ResponseWriter, request *http.R
 		writeJSON(writer, http.StatusUnauthorized, map[string]any{
 			"error": "missing or invalid bearer token",
 		})
+		return
+	}
+
+	if services, observedAt, cacheErr, ok := a.executor.ServicesSnapshot(); ok {
+		payload := map[string]any{
+			"services": services,
+		}
+		if !observedAt.IsZero() {
+			payload["observed_at"] = observedAt
+		}
+		if cacheErr != "" {
+			payload["cache_error"] = cacheErr
+		}
+		writeJSON(writer, http.StatusOK, payload)
 		return
 	}
 

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [string]$OutputPath = '',
-  [string]$TagPattern = 'v0.1.*'
+  [string]$TagPattern = 'v0.1.*',
+  [string]$NextTag = ''
 )
 
 Set-StrictMode -Version Latest
@@ -62,6 +63,15 @@ $unreleased = & $git -C $repoRoot log --pretty=format:%s "$latestTag..HEAD"
 if (-not $unreleased) {
   $unreleased = @('No unreleased changes.')
 }
+$nextNotes = @()
+if (-not [string]::IsNullOrWhiteSpace($NextTag)) {
+  if ($unreleased.Count -eq 1 -and $unreleased[0] -eq 'No unreleased changes.') {
+    $nextNotes = @('No commits found.')
+  } else {
+    $nextNotes = @($unreleased)
+  }
+  $unreleased = @('No unreleased changes.')
+}
 
 $lines = New-Object System.Collections.Generic.List[string]
 $lines.Add('# Releases')
@@ -77,6 +87,14 @@ $lines.Add('')
 if ($unreleased.Count -gt 0 -and $unreleased[0] -ne 'No unreleased changes.') {
   $lines.Add('## Next')
   foreach ($note in $unreleased) {
+    $lines.Add("- $note")
+  }
+  $lines.Add('')
+}
+
+if ($nextNotes.Count -gt 0) {
+  $lines.Add("## $NextTag")
+  foreach ($note in $nextNotes) {
     $lines.Add("- $note")
   }
   $lines.Add('')

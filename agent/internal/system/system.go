@@ -3,6 +3,7 @@ package system
 import (
 	"log"
 	"sync"
+	"time"
 )
 
 type FileEntry struct {
@@ -35,6 +36,10 @@ type Executor struct {
 	mu           sync.Mutex
 	cachedVolume int
 	wakeTarget   WakeTarget
+	serviceMu    sync.RWMutex
+	serviceCache []ServiceInfo
+	serviceAt    time.Time
+	serviceErr   string
 }
 
 func NewExecutor(logger *log.Logger) *Executor {
