@@ -30,6 +30,7 @@ class PowerScreen extends StatelessWidget {
     final canWakeOnRoute = primaryRoute?.canWake ?? selectedDevice.canWake;
     final hasWakeRoute = selectedDevice.hasWakeRoute;
     final isLikelyLocal = primaryRoute?.isLikelyLocal ?? false;
+    final isVpnRoute = primaryRoute?.kind == NetworkTransportKind.vpn;
     final routeLabel =
         primaryRoute == null ? 'Unknown route' : primaryRoute.kindLabel;
 
@@ -74,6 +75,7 @@ class PowerScreen extends StatelessWidget {
             hasWakeRoute: hasWakeRoute,
             canWakeOnRoute: canWakeOnRoute,
             isLikelyLocal: isLikelyLocal,
+            isVpnRoute: isVpnRoute,
             routeLabel: routeLabel,
             onSend: onSend,
           )
@@ -149,6 +151,7 @@ class _OfflinePowerCard extends StatelessWidget {
     required this.hasWakeRoute,
     required this.canWakeOnRoute,
     required this.isLikelyLocal,
+    required this.isVpnRoute,
     required this.routeLabel,
     required this.onSend,
   });
@@ -157,6 +160,7 @@ class _OfflinePowerCard extends StatelessWidget {
   final bool hasWakeRoute;
   final bool canWakeOnRoute;
   final bool isLikelyLocal;
+  final bool isVpnRoute;
   final String routeLabel;
   final Future<void> Function(CommandEnvelope command) onSend;
 
@@ -167,6 +171,9 @@ class _OfflinePowerCard extends StatelessWidget {
         : null;
     final routeMismatchText = !isLikelyLocal
         ? 'This device appears to be on a non-local route. Pick a LAN route in Device Manager or re-pair on the same network.'
+        : null;
+    final vpnText = isVpnRoute
+        ? 'VPN routes usually cannot deliver Wake-on-LAN. Switch to Wi-Fi or Ethernet on the same LAN.'
         : null;
 
     return Card(
@@ -203,6 +210,16 @@ class _OfflinePowerCard extends StatelessWidget {
                     ),
               ),
             ],
+            if (vpnText != null) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                vpnText,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF8A3B12),
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
             if (!hasWakeRoute) ...<Widget>[
               const SizedBox(height: 12),
               Text(
@@ -210,6 +227,15 @@ class _OfflinePowerCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF8A3B12),
                       fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+            if (hasWakeRoute && isLikelyLocal) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                'Wake-on-LAN over Wi-Fi depends on the adapter and BIOS/UEFI settings. If it fails, try Ethernet.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF6F6559),
                     ),
               ),
             ],
@@ -221,7 +247,7 @@ class _OfflinePowerCard extends StatelessWidget {
                 _PowerButton(
                   icon: Icons.power_settings_new,
                   label: 'Wake',
-                  onPressed: hasWakeRoute
+                  onPressed: canWakeOnRoute
                       ? () => onSend(_powerCommand('power_wake'))
                       : null,
                 ),
