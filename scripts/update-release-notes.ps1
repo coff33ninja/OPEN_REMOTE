@@ -42,6 +42,7 @@ $tagListDesc = & $git -C $repoRoot tag --list $TagPattern --sort=-v:refname
 if (-not $tagListDesc) {
   throw "No tags matched pattern '$TagPattern'."
 }
+$tagListDesc = @($tagListDesc)
 
 $sectionMap = @{}
 $prev = $null
@@ -59,8 +60,9 @@ foreach ($tag in $tagListAsc) {
 }
 
 $latestTag = $tagListDesc | Select-Object -First 1
-$unreleased = & $git -C $repoRoot log --pretty=format:%s "$latestTag..HEAD"
-if (-not $unreleased) {
+$unreleasedRaw = & $git -C $repoRoot log --pretty=format:%s "$latestTag..HEAD"
+$unreleased = @($unreleasedRaw)
+if ($unreleased.Count -eq 0) {
   $unreleased = @('No unreleased changes.')
 }
 $nextNotes = @()
