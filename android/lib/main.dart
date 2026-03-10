@@ -26,6 +26,7 @@ import 'features/file_explorer/file_explorer_screen.dart';
 import 'features/keyboard_remote/keyboard_screen.dart';
 import 'features/media_remote/media_screen.dart';
 import 'features/mouse_remote/mouse_screen.dart';
+import 'features/power_remote/power_screen.dart';
 import 'features/remote_designer/remote_designer_screen.dart';
 import 'features/task_manager/task_manager_screen.dart';
 import 'features/updates/updates_screen.dart';
@@ -42,6 +43,7 @@ enum _AppSection {
   mouse('Mouse', Icons.mouse_outlined),
   keyboard('Keyboard', Icons.keyboard_outlined),
   media('Media', Icons.perm_media_outlined),
+  power('Power', Icons.power_settings_new),
   explorer('Explorer', Icons.folder_open_outlined),
   tasks('Tasks', Icons.checklist_outlined),
   files('Files', Icons.upload_file_outlined),
@@ -1096,6 +1098,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         enabled: _client.isConnected,
         onSend: _send,
       ),
+      PowerScreen(
+        device: _selectedDevice,
+        isConnected: _client.isConnected,
+        onSend: _send,
+      ),
       FileExplorerScreen(
         enabled: _client.isConnected && _selectedDevice != null,
         device: _selectedDevice,
@@ -1278,6 +1285,14 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                             onTap: () {
                               Navigator.of(context).pop();
                               _setSection(_AppSection.media);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.power,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.power);
                             },
                           ),
                           _DrawerItem(
