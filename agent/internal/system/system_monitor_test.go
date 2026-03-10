@@ -12,6 +12,9 @@ func TestSystemSnapshotReturnsCopy(t *testing.T) {
 		CPUs: []CpuInfo{
 			{Name: "CPU-1", LoadPercent: 25},
 		},
+		CpuCores: []CpuCoreInfo{
+			{ID: "0", UsagePercent: 10},
+		},
 		Memory: &MemoryInfo{
 			TotalBytes:  100,
 			FreeBytes:   40,
@@ -21,8 +24,15 @@ func TestSystemSnapshotReturnsCopy(t *testing.T) {
 		GPUs: []GpuInfo{
 			{Name: "GPU-1", AdapterBytes: 2048},
 		},
+		GpuMemory: &GpuMemoryInfo{
+			DedicatedUsedBytes: 256,
+			SharedUsedBytes:    128,
+		},
 		Disks: []DiskInfo{
 			{Name: "C:", TotalBytes: 1000, FreeBytes: 500, UsedBytes: 500},
+		},
+		Thermals: []ThermalZoneInfo{
+			{Name: "CPU", TemperatureC: 65.0},
 		},
 	}
 	executor.systemAt = now
@@ -43,14 +53,24 @@ func TestSystemSnapshotReturnsCopy(t *testing.T) {
 	}
 
 	snapshot.CPUs[0].Name = "changed"
+	snapshot.CpuCores[0].ID = "changed"
 	snapshot.GPUs[0].Name = "changed"
 	snapshot.Disks[0].Name = "changed"
 	if snapshot.Memory != nil {
 		snapshot.Memory.TotalBytes = 999
 	}
+	if snapshot.GpuMemory != nil {
+		snapshot.GpuMemory.DedicatedUsedBytes = 999
+	}
+	if len(snapshot.Thermals) > 0 {
+		snapshot.Thermals[0].Name = "changed"
+	}
 
 	if executor.systemSnapshot.CPUs[0].Name != "CPU-1" {
 		t.Fatalf("SystemSnapshot() returned cpu slice alias")
+	}
+	if executor.systemSnapshot.CpuCores[0].ID != "0" {
+		t.Fatalf("SystemSnapshot() returned cpu core slice alias")
 	}
 	if executor.systemSnapshot.GPUs[0].Name != "GPU-1" {
 		t.Fatalf("SystemSnapshot() returned gpu slice alias")
@@ -60,6 +80,12 @@ func TestSystemSnapshotReturnsCopy(t *testing.T) {
 	}
 	if executor.systemSnapshot.Memory == nil || executor.systemSnapshot.Memory.TotalBytes != 100 {
 		t.Fatalf("SystemSnapshot() returned memory alias")
+	}
+	if executor.systemSnapshot.GpuMemory == nil || executor.systemSnapshot.GpuMemory.DedicatedUsedBytes != 256 {
+		t.Fatalf("SystemSnapshot() returned gpu memory alias")
+	}
+	if executor.systemSnapshot.Thermals[0].Name != "CPU" {
+		t.Fatalf("SystemSnapshot() returned thermal slice alias")
 	}
 }
 

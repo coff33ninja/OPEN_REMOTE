@@ -44,12 +44,18 @@ func (e *Executor) SystemSnapshot() (*SystemSnapshot, time.Time, string, bool) {
 
 	snapshot := *e.systemSnapshot
 	snapshot.CPUs = append([]CpuInfo(nil), snapshot.CPUs...)
+	snapshot.CpuCores = append([]CpuCoreInfo(nil), snapshot.CpuCores...)
 	snapshot.GPUs = append([]GpuInfo(nil), snapshot.GPUs...)
 	snapshot.Disks = append([]DiskInfo(nil), snapshot.Disks...)
 	if snapshot.Memory != nil {
 		memCopy := *snapshot.Memory
 		snapshot.Memory = &memCopy
 	}
+	if snapshot.GpuMemory != nil {
+		gpuCopy := *snapshot.GpuMemory
+		snapshot.GpuMemory = &gpuCopy
+	}
+	snapshot.Thermals = append([]ThermalZoneInfo(nil), snapshot.Thermals...)
 
 	return &snapshot, e.systemAt, e.systemErr, true
 }

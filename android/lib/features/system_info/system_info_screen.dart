@@ -157,6 +157,8 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
               const SizedBox(height: 12),
               _buildGpuCard(snapshot),
               const SizedBox(height: 12),
+              _buildThermalCard(snapshot),
+              const SizedBox(height: 12),
               _buildDiskCard(snapshot),
             ],
           ),
@@ -167,6 +169,7 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
 
   Widget _buildCpuCard(AgentSystemSnapshot? snapshot) {
     final cpus = snapshot?.cpus ?? const <AgentCpuInfo>[];
+    final coreStats = snapshot?.cpuCores ?? const <AgentCpuCoreInfo>[];
     if (cpus.isEmpty) {
       return _emptyCard('CPU', 'No CPU data reported.');
     }
@@ -174,20 +177,52 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
     final totalLoad = cpus.fold<int>(0, (sum, cpu) => sum + cpu.loadPercent);
     final avgLoad = (totalLoad / cpus.length).toStringAsFixed(1);
 
+    final coreWidgets = <Widget>[];
+    if (coreStats.isNotEmpty) {
+      final chips = coreStats
+          .map(
+            (AgentCpuCoreInfo core) => Chip(
+              visualDensity: VisualDensity.compact,
+              label: Text(_formatCoreLabel(core)),
+            ),
+          )
+          .toList(growable: false);
+      coreWidgets
+        ..add(const SizedBox(height: 12))
+        ..add(
+          Text(
+            'Per-core load',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        )
+        ..add(const SizedBox(height: 8))
+        ..add(Wrap(spacing: 8, runSpacing: 8, children: chips));
+    }
+
     return _sectionCard(
       title: 'CPU',
       subtitle: 'Average load $avgLoad%',
-      children: cpus
-          .map(
-            (AgentCpuInfo cpu) => ListTile(
-              dense: true,
-              title: Text(cpu.name.isEmpty ? 'CPU' : cpu.name),
-              subtitle: Text(
-                '${cpu.loadPercent}% • ${cpu.cores} cores • ${cpu.logicalCores} threads • ${cpu.maxMHz} MHz',
+      children: <Widget>[
+        ...cpus
+            .map(
+              (AgentCpuInfo cpu) => ListTile(
+                dense: true,
+                title: Text(cpu.name.isEmpty ? 'CPU' : cpu.name),
+                subtitle: Text(
+                  [
+                    if (cpu.vendor.trim().isNotEmpty) cpu.vendor,
+                    if (cpu.architecture.trim().isNotEmpty) cpu.architecture,
+                    '${cpu.loadPercent}% load',
+                    '${cpu.cores} cores',
+                    '${cpu.logicalCores} threads',
+                    '${cpu.maxMHz} MHz',
+                  ].join(' • '),
+                ),
               ),
-            ),
-          )
-          .toList(growable: false),
+            )
+            .toList(growable: false),
+        ...coreWidgets,
+      ],
     );
   }
 
@@ -215,24 +250,61 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
 
   Widget _buildGpuCard(AgentSystemSnapshot? snapshot) {
     final gpus = snapshot?.gpus ?? const <AgentGpuInfo>[];
+    final gpuMemory = snapshot?.gpuMemory;
     if (gpus.isEmpty) {
       return _emptyCard('GPU', 'No GPU data reported.');
     }
 
+    final memoryLines = <String>[
+      if (gpuMemory != null && gpuMemory.dedicatedUsedBytes > 0)
+        'Dedicated used ${_formatBytes(gpuMemory.dedicatedUsedBytes)}',
+      if (gpuMemory != null && gpuMemory.sharedUsedBytes > 0)
+        'Shared used ${_formatBytes(gpuMemory.sharedUsedBytes)}',
+      if (gpuMemory != null && gpuMemory.totalCommittedBytes > 0)
+        'Committed ${_formatBytes(gpuMemory.totalCommittedBytes)}',
+    ];
+
     return _sectionCard(
       title: 'GPU',
-      children: gpus
-          .map(
-            (AgentGpuInfo gpu) => ListTile(
-              dense: true,
-              title: Text(gpu.name.isEmpty ? 'GPU' : gpu.name),
-              subtitle: Text(
-                [
-                  if (gpu.adapterBytes > 0)
-                    'VRAM ${_formatBytes(gpu.adapterBytes)}',
-                  if (gpu.driver.trim().isNotEmpty) 'Driver ${gpu.driver}',
-                ].join(' • '),
+      children: <Widget>[
+        if (memoryLines.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(memoryLines.join(' • ')),
+          ),
+        ...gpus
+            .map(
+              (AgentGpuInfo gpu) => ListTile(
+                dense: true,
+                title: Text(gpu.name.isEmpty ? 'GPU' : gpu.name),
+                subtitle: Text(
+                  [
+                    if (gpu.adapterBytes > 0)
+                      'VRAM ${_formatBytes(gpu.adapterBytes)}',
+                    if (gpu.driver.trim().isNotEmpty) 'Driver ${gpu.driver}',
+                  ].join(' • '),
+                ),
               ),
+            )
+            .toList(growable: false),
+      ],
+    );
+  }
+
+  Widget _buildThermalCard(AgentSystemSnapshot? snapshot) {
+    final thermals = snapshot?.thermals ?? const <AgentThermalZoneInfo>[];
+    if (thermals.isEmpty) {
+      return _emptyCard('Thermals', 'No thermal data reported.');
+    }
+
+    return _sectionCard(
+      title: 'Thermals',
+      children: thermals
+          .map(
+            (AgentThermalZoneInfo zone) => ListTile(
+              dense: true,
+              title: Text(zone.name.isEmpty ? 'Thermal' : zone.name),
+              trailing: Text('${zone.temperatureC.toStringAsFixed(1)}°C'),
             ),
           )
           .toList(growable: false),
@@ -355,5 +427,12 @@ class _SystemInfoScreenState extends State<SystemInfoScreen> {
     final date = parts.first;
     final time = parts.length > 1 ? parts.last.substring(0, 5) : '';
     return '$date $time'.trim();
+  }
+
+  String _formatCoreLabel(AgentCpuCoreInfo core) {
+    final id = core.id.trim().isEmpty ? 'Core' : 'Core ${core.id.trim()}';
+    final kind = core.kind.trim();
+    final suffix = kind.isEmpty ? '' : ' ($kind)';
+    return '$id$suffix: ${core.usagePercent}%';
   }
 }

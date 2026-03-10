@@ -82,6 +82,8 @@ class AgentService {
 class AgentCpuInfo {
   const AgentCpuInfo({
     required this.name,
+    this.vendor = '',
+    this.architecture = '',
     required this.loadPercent,
     required this.cores,
     required this.logicalCores,
@@ -89,6 +91,8 @@ class AgentCpuInfo {
   });
 
   final String name;
+  final String vendor;
+  final String architecture;
   final int loadPercent;
   final int cores;
   final int logicalCores;
@@ -97,10 +101,32 @@ class AgentCpuInfo {
   factory AgentCpuInfo.fromJson(Map<String, dynamic> json) {
     return AgentCpuInfo(
       name: json['name'] as String? ?? '',
+      vendor: json['vendor'] as String? ?? '',
+      architecture: json['architecture'] as String? ?? '',
       loadPercent: (json['load_percent'] as num?)?.toInt() ?? 0,
       cores: (json['cores'] as num?)?.toInt() ?? 0,
       logicalCores: (json['logical_cores'] as num?)?.toInt() ?? 0,
       maxMHz: (json['max_mhz'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class AgentCpuCoreInfo {
+  const AgentCpuCoreInfo({
+    required this.id,
+    required this.usagePercent,
+    this.kind = '',
+  });
+
+  final String id;
+  final int usagePercent;
+  final String kind;
+
+  factory AgentCpuCoreInfo.fromJson(Map<String, dynamic> json) {
+    return AgentCpuCoreInfo(
+      id: json['id'] as String? ?? '',
+      usagePercent: (json['usage_percent'] as num?)?.toInt() ?? 0,
+      kind: json['kind'] as String? ?? '',
     );
   }
 }
@@ -148,6 +174,44 @@ class AgentGpuInfo {
   }
 }
 
+class AgentGpuMemoryInfo {
+  const AgentGpuMemoryInfo({
+    required this.dedicatedUsedBytes,
+    required this.sharedUsedBytes,
+    required this.totalCommittedBytes,
+  });
+
+  final int dedicatedUsedBytes;
+  final int sharedUsedBytes;
+  final int totalCommittedBytes;
+
+  factory AgentGpuMemoryInfo.fromJson(Map<String, dynamic> json) {
+    return AgentGpuMemoryInfo(
+      dedicatedUsedBytes: (json['dedicated_used_bytes'] as num?)?.toInt() ?? 0,
+      sharedUsedBytes: (json['shared_used_bytes'] as num?)?.toInt() ?? 0,
+      totalCommittedBytes:
+          (json['total_committed_bytes'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class AgentThermalZoneInfo {
+  const AgentThermalZoneInfo({
+    required this.name,
+    required this.temperatureC,
+  });
+
+  final String name;
+  final double temperatureC;
+
+  factory AgentThermalZoneInfo.fromJson(Map<String, dynamic> json) {
+    return AgentThermalZoneInfo(
+      name: json['name'] as String? ?? '',
+      temperatureC: (json['temperature_c'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class AgentDiskInfo {
   const AgentDiskInfo({
     required this.name,
@@ -186,17 +250,23 @@ class AgentDiskInfo {
 class AgentSystemSnapshot {
   const AgentSystemSnapshot({
     required this.cpus,
+    required this.cpuCores,
     required this.memory,
     required this.gpus,
+    required this.gpuMemory,
     required this.disks,
+    required this.thermals,
     required this.observedAt,
     required this.cacheError,
   });
 
   final List<AgentCpuInfo> cpus;
+  final List<AgentCpuCoreInfo> cpuCores;
   final AgentMemoryInfo? memory;
   final List<AgentGpuInfo> gpus;
+  final AgentGpuMemoryInfo? gpuMemory;
   final List<AgentDiskInfo> disks;
+  final List<AgentThermalZoneInfo> thermals;
   final DateTime? observedAt;
   final String cacheError;
 
@@ -206,22 +276,36 @@ class AgentSystemSnapshot {
     String? cacheError,
   }) {
     final cpus = json['cpus'] as List<dynamic>? ?? const <dynamic>[];
+    final cpuCores = json['cpu_cores'] as List<dynamic>? ?? const <dynamic>[];
     final gpus = json['gpus'] as List<dynamic>? ?? const <dynamic>[];
+    final gpuMemoryJson = json['gpu_memory'] as Map<String, dynamic>?;
     final disks = json['disks'] as List<dynamic>? ?? const <dynamic>[];
+    final thermals = json['thermals'] as List<dynamic>? ?? const <dynamic>[];
     final memoryJson = json['memory'] as Map<String, dynamic>?;
     return AgentSystemSnapshot(
       cpus: cpus
           .map((dynamic item) =>
               AgentCpuInfo.fromJson(item as Map<String, dynamic>))
           .toList(growable: false),
+      cpuCores: cpuCores
+          .map((dynamic item) =>
+              AgentCpuCoreInfo.fromJson(item as Map<String, dynamic>))
+          .toList(growable: false),
       memory: memoryJson == null ? null : AgentMemoryInfo.fromJson(memoryJson),
       gpus: gpus
           .map((dynamic item) =>
               AgentGpuInfo.fromJson(item as Map<String, dynamic>))
           .toList(growable: false),
+      gpuMemory: gpuMemoryJson == null
+          ? null
+          : AgentGpuMemoryInfo.fromJson(gpuMemoryJson),
       disks: disks
           .map((dynamic item) =>
               AgentDiskInfo.fromJson(item as Map<String, dynamic>))
+          .toList(growable: false),
+      thermals: thermals
+          .map((dynamic item) =>
+              AgentThermalZoneInfo.fromJson(item as Map<String, dynamic>))
           .toList(growable: false),
       observedAt: observedAt,
       cacheError: cacheError ?? '',
