@@ -5,7 +5,6 @@ package system
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"sort"
 	"strings"
 )
@@ -94,23 +93,4 @@ func (e *Executor) StopService(name string) error {
 func (e *Executor) RestartService(name string) error {
 	_, err := runPowerShell(fmt.Sprintf("Restart-Service -Name %s -ErrorAction Stop", psQuote(name)))
 	return err
-}
-
-func runPowerShell(command string) ([]byte, error) {
-	output, err := exec.Command(
-		"powershell",
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		command,
-	).CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return output, nil
-}
-
-func psQuote(value string) string {
-	escaped := strings.ReplaceAll(value, "'", "''")
-	return "'" + escaped + "'"
 }

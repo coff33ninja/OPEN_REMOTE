@@ -455,6 +455,48 @@ class ApiClient {
     }
   }
 
+  Future<AgentSystemSnapshot> fetchSystemSnapshot(Device device) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('Device must be paired before loading system info.');
+    }
+
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.getUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: '/api/v1/system/info',
+        ),
+      );
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+
+      final response = await request.close();
+      final payload = await utf8.decoder.bind(response).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'System info request failed with status ${response.statusCode}: $payload',
+        );
+      }
+
+      final json = jsonDecode(payload) as Map<String, dynamic>;
+      final snapshotJson =
+          json['snapshot'] as Map<String, dynamic>? ?? const {};
+      final observedAt =
+          DateTime.tryParse(json['observed_at'] as String? ?? '');
+      final cacheError = json['cache_error'] as String?;
+      return AgentSystemSnapshot.fromJson(
+        snapshotJson,
+        observedAt: observedAt,
+        cacheError: cacheError,
+      );
+    } finally {
+      httpClient.close();
+    }
+  }
+
   Future<void> startService(Device device, String name) async {
     await _postServiceAction(
       device,

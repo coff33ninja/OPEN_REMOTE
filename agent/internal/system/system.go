@@ -32,14 +32,18 @@ type ServiceInfo struct {
 }
 
 type Executor struct {
-	logger       *log.Logger
-	mu           sync.Mutex
-	cachedVolume int
-	wakeTarget   WakeTarget
-	serviceMu    sync.RWMutex
-	serviceCache []ServiceInfo
-	serviceAt    time.Time
-	serviceErr   string
+	logger         *log.Logger
+	mu             sync.Mutex
+	cachedVolume   int
+	wakeTarget     WakeTarget
+	serviceMu      sync.RWMutex
+	serviceCache   []ServiceInfo
+	serviceAt      time.Time
+	serviceErr     string
+	systemMu       sync.RWMutex
+	systemSnapshot *SystemSnapshot
+	systemAt       time.Time
+	systemErr      string
 }
 
 func NewExecutor(logger *log.Logger) *Executor {

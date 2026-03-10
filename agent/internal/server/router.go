@@ -61,6 +61,7 @@ func (a *Application) ListenAndServe(ctx context.Context) error {
 		}
 	}()
 	go a.executor.StartServiceMonitor(ctx, 15*time.Second)
+	go a.executor.StartSystemMonitor(ctx, 5*time.Second)
 
 	server := &http.Server{
 		Addr:              net.JoinHostPort(a.config.ListenAddress, strconv.Itoa(a.config.Port)),
@@ -117,6 +118,7 @@ func (a *Application) routes() http.Handler {
 	mux.HandleFunc("/api/v1/services/start", a.handleServiceStart)
 	mux.HandleFunc("/api/v1/services/stop", a.handleServiceStop)
 	mux.HandleFunc("/api/v1/services/restart", a.handleServiceRestart)
+	mux.HandleFunc("/api/v1/system/info", a.handleSystemInfo)
 	mux.HandleFunc("/api/v1/commands", a.handleCommands)
 	mux.HandleFunc(a.config.WebSocketPath, a.handleWebSocket)
 
@@ -1080,6 +1082,49 @@ func (a *Application) handleServices(writer http.ResponseWriter, request *http.R
 
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"services": services,
+	})
+}
+
+func (a *Application) handleSystemInfo(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	if snapshot, observedAt, cacheErr, ok := a.executor.SystemSnapshot(); ok {
+		payload := map[string]any{
+			"snapshot": snapshot,
+		}
+		if !observedAt.IsZero() {
+			payload["observed_at"] = observedAt
+		}
+		if cacheErr != "" {
+			payload["cache_error"] = cacheErr
+		}
+		writeJSON(writer, http.StatusOK, payload)
+		return
+	}
+
+	snapshot, err := a.executor.FetchSystemSnapshot()
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"snapshot":    snapshot,
+		"observed_at": time.Now().UTC(),
 	})
 }
 

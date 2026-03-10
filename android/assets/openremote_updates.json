@@ -9,7 +9,7 @@
     "release_notes": "https://github.com/coff33ninja/OPEN_REMOTE/blob/main/docs/releases.md"
   },
   "versions": {
-    "android": "0.1.12+12",
-    "agent": "0.1.12"
+    "android": "0.1.13+13",
+    "agent": "0.1.13"
   }
 }

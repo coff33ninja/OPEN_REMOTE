@@ -1,3 +1,8 @@
 {
-    "chatgpt.openOnStartup": true
+    "chatgpt.openOnStartup": true,
+    "gopls": {
+        "env": {
+            "GOWORK": "E:/Scripts/OPEN_REMOTE/go.work"
+        }
+    }
 }
