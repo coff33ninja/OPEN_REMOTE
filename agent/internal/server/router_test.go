@@ -291,6 +291,81 @@ func TestProcessesEndpointListsProcesses(t *testing.T) {
 	}
 }
 
+func TestServicesEndpointRequiresAuth(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/services", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusUnauthorized, response.Body.String())
+	}
+}
+
+func TestServicesEndpointRejectsMethod(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/services", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
+	}
+}
+
+func TestServiceStartRequiresAuth(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	body := jsonBody(t, map[string]any{
+		"name": "Spooler",
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/services/start", body)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusUnauthorized, response.Body.String())
+	}
+}
+
+func TestServiceStartRejectsMethod(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/services/start", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
+	}
+}
+
+func TestSystemInfoEndpointRequiresAuth(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/system/info", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusUnauthorized, response.Body.String())
+	}
+}
+
+func TestSystemInfoEndpointRejectsMethod(t *testing.T) {
+	app, _ := newTestApplication(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/system/info", nil)
+	response := httptest.NewRecorder()
+	app.routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d body=%s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
+	}
+}
+
 func TestCommandsEndpointExecutesMacro(t *testing.T) {
 	app, _ := newTestApplication(t)
 	token := authorizeTestToken(t, app.authorizer)
