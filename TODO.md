@@ -12,7 +12,7 @@
 - Remaining (file explorer): large transfers are still one-shot with no chunking, resume, streaming, compression, or progress reporting.
 
 ## Not Yet Implemented (Hard Gaps)
-- Services are not implemented. The app has a process list and terminate action, but there is no Windows service inventory, no start/stop/restart, and no daemon/service health view. The current task manager is just tasklist plus taskkill. See android/lib/features/task_manager/task_manager_screen.dart and agent/internal/system/processes_windows.go.
+- Services are now implemented for Windows with list and start/stop/restart actions, but there is no daemon/service health detail view, history, or non-Windows support yet. See android/lib/features/services/services_screen.dart and agent/internal/system/services_windows.go.
 - Current active items are mostly absent. There is no active window list, no foreground app, no media-session metadata, no currently playing track, no window titles, no CPU/network/disk telemetry, and no live process updates. The agent is command-oriented, not state-oriented, in agent/internal/server/websocket.go.
 - Volume is not real system-state volume. It is a cached approximation stepped via virtual keys, so it cannot reliably reflect actual OS mixer state, mute state, or per-app volume. See agent/internal/system/system.go and agent/internal/system/volume_windows.go.
 - Custom remotes are still limited to button, toggle, macro_button, slider, text_input, touchpad, dpad, and grid_buttons. There is no list view control, no dropdowns, no image buttons, no hold-repeat buttons, no joystick, no rotary knob, no state-bound widgets, and no agent-fed dynamic controls. See android/lib/features/custom_remotes/remote_renderer.dart.

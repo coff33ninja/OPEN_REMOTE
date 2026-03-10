@@ -418,6 +418,70 @@ class ApiClient {
     }
   }
 
+  Future<List<AgentService>> fetchServices(Device device) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('Device must be paired before listing services.');
+    }
+
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.getUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: '/api/v1/services',
+        ),
+      );
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+
+      final response = await request.close();
+      final payload = await utf8.decoder.bind(response).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Services request failed with status ${response.statusCode}: $payload',
+        );
+      }
+
+      final json = jsonDecode(payload) as Map<String, dynamic>;
+      final entries = json['services'] as List<dynamic>? ?? const <dynamic>[];
+      return entries
+          .map((dynamic item) =>
+              AgentService.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } finally {
+      httpClient.close();
+    }
+  }
+
+  Future<void> startService(Device device, String name) async {
+    await _postServiceAction(
+      device,
+      path: '/api/v1/services/start',
+      name: name,
+      label: 'Start service',
+    );
+  }
+
+  Future<void> stopService(Device device, String name) async {
+    await _postServiceAction(
+      device,
+      path: '/api/v1/services/stop',
+      name: name,
+      label: 'Stop service',
+    );
+  }
+
+  Future<void> restartService(Device device, String name) async {
+    await _postServiceAction(
+      device,
+      path: '/api/v1/services/restart',
+      name: name,
+      label: 'Restart service',
+    );
+  }
+
   Future<void> terminateProcess(Device device, int pid) async {
     final token = device.accessToken;
     if (token == null || token.isEmpty) {
@@ -480,6 +544,43 @@ class ApiClient {
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
           '$errorLabel failed with status ${response.statusCode}: $responsePayload',
+        );
+      }
+    } finally {
+      httpClient.close();
+    }
+  }
+
+  Future<void> _postServiceAction(
+    Device device, {
+    required String path,
+    required String name,
+    required String label,
+  }) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('Device must be paired before service actions.');
+    }
+
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.postUrl(
+        Uri(
+          scheme: 'http',
+          host: device.host,
+          port: device.port,
+          path: path,
+        ),
+      );
+      request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.write(jsonEncode(<String, dynamic>{'name': name}));
+
+      final response = await request.close();
+      final responsePayload = await utf8.decoder.bind(response).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          '$label failed with status ${response.statusCode}: $responsePayload',
         );
       }
     } finally {

@@ -112,6 +112,10 @@ func (a *Application) routes() http.Handler {
 	mux.HandleFunc("/api/v1/files", a.handleFilesList)
 	mux.HandleFunc("/api/v1/processes", a.handleProcesses)
 	mux.HandleFunc("/api/v1/processes/terminate", a.handleTerminateProcess)
+	mux.HandleFunc("/api/v1/services", a.handleServices)
+	mux.HandleFunc("/api/v1/services/start", a.handleServiceStart)
+	mux.HandleFunc("/api/v1/services/stop", a.handleServiceStop)
+	mux.HandleFunc("/api/v1/services/restart", a.handleServiceRestart)
 	mux.HandleFunc("/api/v1/commands", a.handleCommands)
 	mux.HandleFunc(a.config.WebSocketPath, a.handleWebSocket)
 
@@ -1033,6 +1037,96 @@ func (a *Application) handleTerminateProcess(writer http.ResponseWriter, request
 	writeJSON(writer, http.StatusAccepted, map[string]any{
 		"status": "accepted",
 		"pid":    input.PID,
+	})
+}
+
+func (a *Application) handleServices(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	services, err := a.executor.ListServices()
+	if err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"services": services,
+	})
+}
+
+func (a *Application) handleServiceStart(writer http.ResponseWriter, request *http.Request) {
+	a.handleServiceAction(writer, request, "start", a.executor.StartService)
+}
+
+func (a *Application) handleServiceStop(writer http.ResponseWriter, request *http.Request) {
+	a.handleServiceAction(writer, request, "stop", a.executor.StopService)
+}
+
+func (a *Application) handleServiceRestart(writer http.ResponseWriter, request *http.Request) {
+	a.handleServiceAction(writer, request, "restart", a.executor.RestartService)
+}
+
+func (a *Application) handleServiceAction(
+	writer http.ResponseWriter,
+	request *http.Request,
+	action string,
+	fn func(name string) error,
+) {
+	if request.Method != http.MethodPost {
+		writeJSON(writer, http.StatusMethodNotAllowed, map[string]any{
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	if _, ok := a.authorizer.Authenticate(request); !ok {
+		writeJSON(writer, http.StatusUnauthorized, map[string]any{
+			"error": "missing or invalid bearer token",
+		})
+		return
+	}
+
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "invalid service payload",
+		})
+		return
+	}
+	if strings.TrimSpace(input.Name) == "" {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": "service name is required",
+		})
+		return
+	}
+
+	if err := fn(input.Name); err != nil {
+		writeJSON(writer, http.StatusBadRequest, map[string]any{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	writeJSON(writer, http.StatusAccepted, map[string]any{
+		"status": "accepted",
+		"action": action,
+		"name":   input.Name,
 	})
 }
 

@@ -44,7 +44,7 @@ The current implementation is biased toward the first usable milestone:
 
 ```powershell
 .\scripts\build-release-artifacts.ps1 -Clean
-.\scripts\publish-release.ps1 -Tag v0.1.6 -Rebuild
+.\scripts\publish-release.ps1 -Tag v0.1.10 -Rebuild
 ```
 
 The release path is currently host-driven. `build-release-artifacts.ps1` stages the Windows agent and Android APK under the gitignored `release-artifacts/` folder, and `publish-release.ps1` uses `gh release` from your machine instead of GitHub-hosted runners.

@@ -22,6 +22,13 @@ type ProcessInfo struct {
 	Memory     string `json:"memory,omitempty"`
 }
 
+type ServiceInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Status      string `json:"status"`
+	StartType   string `json:"start_type,omitempty"`
+}
+
 type Executor struct {
 	logger       *log.Logger
 	mu           sync.Mutex

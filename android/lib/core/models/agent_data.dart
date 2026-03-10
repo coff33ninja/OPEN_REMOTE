@@ -52,3 +52,26 @@ class AgentProcess {
     );
   }
 }
+
+class AgentService {
+  const AgentService({
+    required this.name,
+    required this.displayName,
+    required this.status,
+    required this.startType,
+  });
+
+  final String name;
+  final String displayName;
+  final String status;
+  final String startType;
+
+  factory AgentService.fromJson(Map<String, dynamic> json) {
+    return AgentService(
+      name: json['name'] as String? ?? '',
+      displayName: json['display_name'] as String? ?? '',
+      status: json['status'] as String? ?? '',
+      startType: json['start_type'] as String? ?? '',
+    );
+  }
+}

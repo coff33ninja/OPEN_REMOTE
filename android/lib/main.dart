@@ -28,6 +28,7 @@ import 'features/media_remote/media_screen.dart';
 import 'features/mouse_remote/mouse_screen.dart';
 import 'features/power_remote/power_screen.dart';
 import 'features/remote_designer/remote_designer_screen.dart';
+import 'features/services/services_screen.dart';
 import 'features/task_manager/task_manager_screen.dart';
 import 'features/updates/updates_screen.dart';
 import 'ui/themes/app_theme.dart';
@@ -47,6 +48,7 @@ enum _AppSection {
   power('Power', Icons.power_settings_new),
   explorer('Explorer', Icons.folder_open_outlined),
   tasks('Tasks', Icons.checklist_outlined),
+  services('Services', Icons.miscellaneous_services_outlined),
   files('Files', Icons.upload_file_outlined),
   updates('Updates', Icons.system_update_alt_outlined),
   custom('Custom Remotes', Icons.tune_outlined),
@@ -1301,6 +1303,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         device: _selectedDevice,
         apiClient: _apiClient,
       ),
+      ServicesScreen(
+        enabled: _client.isConnected && _selectedDevice != null,
+        device: _selectedDevice,
+        apiClient: _apiClient,
+      ),
       FileTransferScreen(
         enabled: _client.isConnected && _selectedDevice != null,
         device: _selectedDevice,
@@ -1511,6 +1518,14 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                             onTap: () {
                               Navigator.of(context).pop();
                               _setSection(_AppSection.tasks);
+                            },
+                          ),
+                          _DrawerItem(
+                            section: _AppSection.services,
+                            currentSection: _currentSection,
+                            onTap: () {
+                              Navigator.of(context).pop();
+                              _setSection(_AppSection.services);
                             },
                           ),
                           _DrawerItem(
