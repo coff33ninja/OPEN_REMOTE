@@ -9,8 +9,22 @@ import '../models/device.dart';
 import '../models/pairing.dart';
 import '../models/remote_layout.dart';
 
+class _QueuedClientLog {
+  _QueuedClientLog({
+    required this.deviceId,
+    required this.payload,
+  });
+
+  final String deviceId;
+  final Map<String, dynamic> payload;
+}
+
 class ApiClient {
   const ApiClient();
+
+  static const int _maxClientLogQueue = 50;
+  static final List<_QueuedClientLog> _clientLogQueue = <_QueuedClientLog>[];
+  static bool _clientLogFlushInProgress = false;
 
   Future<Device> fetchMeta(Device device) async {
     final httpClient = HttpClient();
@@ -566,12 +580,86 @@ class ApiClient {
     String? action,
     Map<String, dynamic>? context,
   }) async {
-    final token = device.accessToken;
-    if (token == null || token.isEmpty) {
+    final payload = <String, dynamic>{
+      'level': level,
+      'message': message,
+      if (error != null) 'error': error.toString(),
+      if (stack != null) 'stack': stack.toString(),
+      if (screen != null) 'screen': screen,
+      if (action != null) 'action': action,
+      if (context != null && context.isNotEmpty) 'context': context,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'device_id': device.id,
+      'device_name': device.name,
+    };
+
+    if (device.accessToken == null || device.accessToken!.isEmpty) {
+      _enqueueClientLog(device.id, payload);
       return;
     }
 
+    try {
+      await _sendClientLog(device, payload);
+    } catch (_) {
+      _enqueueClientLog(device.id, payload);
+    }
+  }
+
+  Future<void> flushClientLogs(Device device) async {
+    if (_clientLogFlushInProgress) {
+      return;
+    }
+    if (device.accessToken == null || device.accessToken!.isEmpty) {
+      return;
+    }
+    if (_clientLogQueue.isEmpty) {
+      return;
+    }
+
+    _clientLogFlushInProgress = true;
+    try {
+      final pending = _clientLogQueue
+          .where((entry) => entry.deviceId == device.id)
+          .toList(growable: false);
+      for (final entry in pending) {
+        try {
+          await _sendClientLog(device, entry.payload);
+          _clientLogQueue.remove(entry);
+        } catch (_) {
+          break;
+        }
+      }
+    } finally {
+      _clientLogFlushInProgress = false;
+    }
+  }
+
+  static void _enqueueClientLog(
+    String deviceId,
+    Map<String, dynamic> payload,
+  ) {
+    _clientLogQueue.add(
+      _QueuedClientLog(deviceId: deviceId, payload: payload),
+    );
+    if (_clientLogQueue.length > _maxClientLogQueue) {
+      _clientLogQueue.removeRange(
+        0,
+        _clientLogQueue.length - _maxClientLogQueue,
+      );
+    }
+  }
+
+  Future<void> _sendClientLog(
+    Device device,
+    Map<String, dynamic> payload,
+  ) async {
+    final token = device.accessToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('Device must be paired before logging errors.');
+    }
+
     final httpClient = HttpClient();
+    httpClient.connectionTimeout = const Duration(seconds: 5);
     try {
       final request = await httpClient.postUrl(
         Uri(
@@ -583,27 +671,15 @@ class ApiClient {
       );
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      request.write(
-        jsonEncode(
-          <String, dynamic>{
-            'level': level,
-            'message': message,
-            if (error != null) 'error': error.toString(),
-            if (stack != null) 'stack': stack.toString(),
-            if (screen != null) 'screen': screen,
-            if (action != null) 'action': action,
-            if (context != null && context.isNotEmpty) 'context': context,
-            'created_at': DateTime.now().toUtc().toIso8601String(),
-            'device_id': device.id,
-            'device_name': device.name,
-          },
-        ),
-      );
+      request.write(jsonEncode(payload));
 
       final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Client log failed with status ${response.statusCode}.',
+        );
+      }
       await response.drain();
-    } catch (_) {
-      // Swallow log reporting errors to avoid feedback loops.
     } finally {
       httpClient.close();
     }

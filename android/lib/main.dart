@@ -351,6 +351,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
           await _persistState();
           await _flushPendingShares();
+          unawaited(_apiClient.flushClientLogs(connectedDevice));
           return;
         } catch (error) {
           if (attempt != _connectAttempt) {
