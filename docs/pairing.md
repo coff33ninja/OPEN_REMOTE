@@ -12,6 +12,7 @@ Pair the Android client with a desktop agent in one scan without manual IP entry
 4. The client calls `POST /api/v1/pairing/complete` with the pairing token and device name.
 5. The agent consumes the pairing token and returns a long-lived bearer token.
 6. The client stores the bearer token and uses it for future command requests.
+7. If device selection is unlocked, the client can auto-select and connect to the newly paired device. When selection is locked, the device is stored but not auto-selected.
 
 ## QR Payload Shape
 

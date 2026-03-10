@@ -15,6 +15,7 @@ class PersistedAppState {
     this.designedRemoteLayouts = const <RemoteLayout>[],
     this.selectedDeviceId,
     this.preferLocalRoutes = true,
+    this.selectionLocked = false,
   });
 
   final List<Device> pairedDevices;
@@ -25,6 +26,7 @@ class PersistedAppState {
   final List<RemoteLayout> designedRemoteLayouts;
   final String? selectedDeviceId;
   final bool preferLocalRoutes;
+  final bool selectionLocked;
 
   factory PersistedAppState.fromJson(Map<String, dynamic> json) {
     return PersistedAppState(
@@ -67,6 +69,7 @@ class PersistedAppState {
       */
       selectedDeviceId: json['selected_device_id'] as String?,
       preferLocalRoutes: json['prefer_local_routes'] as bool? ?? true,
+      selectionLocked: json['selection_locked'] as bool? ?? false,
     );
   }
 
@@ -85,6 +88,7 @@ class PersistedAppState {
           .toList(),
       'selected_device_id': selectedDeviceId,
       'prefer_local_routes': preferLocalRoutes,
+      'selection_locked': selectionLocked,
     }..removeWhere((String key, dynamic value) => value == null);
   }
 }

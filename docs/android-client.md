@@ -23,7 +23,8 @@ android/
 - Pair URI ingestion through the `openremote://pair` payload format.
 - Camera QR scanning for pairing sessions.
 - Real pairing completion against the agent API.
-- Wake-on-LAN support for remembered agents, including remote-side `power_wake` interception.
+- Global device selection with a lock that prevents auto-switching when pairing or reconnecting.
+- Wake-on-LAN support for remembered agents, including remote-side `power_wake` interception and offline wake from the Power screen.
 - Authenticated WebSocket command transport.
 - Local visual remote designer with live preview and JSON export.
 - Dynamic remote rendering from JSON definitions fetched from the agent.
@@ -32,8 +33,14 @@ android/
 - File upload to the connected agent.
 - Android share-intent intake that uploads queued items to the connected agent.
 - Local persistence for paired devices, recent agents, favorite agents, favorite remotes, and cached remote layouts.
-- A bundled power remote for wake, sleep, and shutdown commands.
+- A dedicated power screen that offers Wake-on-LAN when offline, and restart/shutdown/sleep when connected.
 - Mouse, keyboard, media, and custom remote starter experiences.
+
+## Device Selection and Power Rules
+
+All UI surfaces operate on a single selected device. Selection is global, persisted, and can be locked to prevent auto-switching when pairing or reconnecting. Use the device selector in the app bar to change or lock the active device.
+
+Wake-on-LAN does not require a live WebSocket session and is available while the agent is offline. Shutdown, restart, and sleep are only enabled when the selected device is connected.
 
 ## Rendering Model
 

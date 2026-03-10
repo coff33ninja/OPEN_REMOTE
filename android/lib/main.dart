@@ -101,6 +101,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   bool _loading = true;
   bool _uploadingSharedFiles = false;
   bool _preferLocalRoutes = true;
+  bool _selectionLocked = false;
   String _status = 'Ready';
   _AppSection _currentSection = _AppSection.dashboard;
 
@@ -144,6 +145,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       _favoriteRemoteIds = persisted.favoriteRemoteIds;
       _selectedDevice = preferredDevice;
       _preferLocalRoutes = persisted.preferLocalRoutes;
+      _selectionLocked = persisted.selectionLocked;
       _loading = false;
     });
 
@@ -163,6 +165,18 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     Device device, {
     bool announceRestore = true,
   }) async {
+    if (_selectionLocked &&
+        _selectedDevice != null &&
+        _selectedDevice!.id != device.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Selection locked to ${_selectedDevice!.name}. Unlock to connect.',
+          ),
+        ),
+      );
+      return;
+    }
     if (device.accessToken == null || device.accessToken!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -278,7 +292,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     }
 
     setState(() {
-      _selectedDevice = device;
+      if (!_selectionLocked ||
+          _selectedDevice == null ||
+          _selectedDevice!.id == device.id) {
+        _selectedDevice = device;
+      }
       _devices = _replaceOrInsertDevice(device);
       _recentDeviceIds = _recordRecentDevice(device.id);
       _status = 'Sending wake packet to ${device.name}';
@@ -343,6 +361,15 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       });
 
       await _persistState();
+      if (_selectionLocked &&
+          _selectedDevice != null &&
+          _selectedDevice!.id != pairedDevice.id) {
+        setState(() {
+          _status = 'Paired with ${pairedDevice.name} (selection locked)';
+        });
+        await _persistState();
+        return;
+      }
       await _connectToDevice(pairedDevice);
     } catch (error) {
       if (!mounted) {
@@ -525,6 +552,93 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           : 'Preferred or last-working routes will be tried first';
     });
     await _persistState();
+  }
+
+  Future<void> _setSelectionLocked(bool value) async {
+    setState(() {
+      _selectionLocked = value;
+      _status = value ? 'Selection locked' : 'Selection unlocked';
+    });
+    await _persistState();
+  }
+
+  Future<void> _selectDevice(Device device) async {
+    setState(() {
+      _selectedDevice = device;
+      _status = 'Selected ${device.name}';
+    });
+    await _persistState();
+  }
+
+  Future<void> _openDeviceSelector() async {
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Select device',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _selectionLocked
+                      ? 'Selection is locked. Unlock to auto-switch.'
+                      : 'Select a device for all controls. Lock to prevent auto-switch.',
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: _selectionLocked,
+                  title: const Text('Lock selection'),
+                  onChanged: (bool value) async {
+                    Navigator.of(context).pop();
+                    await _setSelectionLocked(value);
+                  },
+                ),
+                const SizedBox(height: 8),
+                if (_devices.isEmpty)
+                  const Text('No paired devices yet.')
+                else
+                  ..._orderedDevices().map(
+                    (Device device) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        _selectedDevice?.id == device.id
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                      ),
+                      title: Text(device.name),
+                      subtitle: Text('${device.host}:${device.port}'),
+                      trailing: FilledButton(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _selectDevice(device);
+                        },
+                        child: const Text('Select'),
+                      ),
+                      onTap: () async {
+                        Navigator.of(context).pop();
+                        await _selectDevice(device);
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _refreshDevices() async {
@@ -761,6 +875,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         designedRemoteLayouts: _designedRemoteLayouts,
         selectedDeviceId: _selectedDevice?.id,
         preferLocalRoutes: _preferLocalRoutes,
+        selectionLocked: _selectionLocked,
       ),
     );
   }
@@ -1163,6 +1278,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                   onPressed: _refreshDevices,
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Refresh discovery',
+                ),
+                IconButton(
+                  onPressed: _openDeviceSelector,
+                  icon: const Icon(Icons.devices),
+                  tooltip: 'Select device',
                 ),
                 Padding(
                   padding: const EdgeInsets.only(right: 16),
