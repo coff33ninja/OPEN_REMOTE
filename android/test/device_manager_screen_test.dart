@@ -150,4 +150,50 @@ void main() {
     expect(find.text('socket timeout'), findsOneWidget);
     expect(find.text('Route policy'), findsOneWidget);
   });
+
+  testWidgets('DeviceManagerScreen shows pair action for unpaired devices',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1200, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final device = Device(
+      id: 'desk',
+      name: 'Desk PC',
+      host: '192.168.0.10',
+      port: 9876,
+      serviceType: '_openremote._tcp',
+      networkRoutes: const <NetworkRoute>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DeviceManagerScreen(
+            devices: <Device>[device],
+            selectedDevice: null,
+            favoriteDeviceIds: const <String>{},
+            recentDeviceIds: const <String>[],
+            statusMessage: 'Ready',
+            preferLocalRoutes: true,
+            onConnect: (Device device) async {},
+            onPairUriSubmit: (String pairUri) async {},
+            onToggleFavoriteDevice: (Device device) async {},
+            onDeleteDevice: (Device device) async {},
+            onRefreshDevices: () async {},
+            onSetPreferredRoute: (Device device, NetworkRoute route) async {},
+            onSetRoutePolicy: (Device device, String policy) async {},
+            onPreferLocalRoutesChanged: (bool value) async {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.widgetWithText(FilledButton, 'Pair'), findsOneWidget);
+    final pairFirst = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Pair first'),
+    );
+    expect(pairFirst.onPressed, isNull);
+  });
 }

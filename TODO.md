@@ -35,3 +35,10 @@
 - There is no diagnostics surface for latency, socket health, auth expiry, command failure history, or plugin availability.
 - The app has device management now, but not a true desktop detail page with OS info, plugin inventory, current session state, storage info, or live capability status.
 - Android release settings are still using the debug signing config and the default applicationId. See android/android/app/build.gradle.kts.
+- Device/route bottom sheets are non-scrollable; large lists can overflow on small screens (pairing route chooser, device selector, device details routes).
+- Connection state is optimistic; UI can stay "Connected" after socket close. Track WebSocket onDone/onError and gate controls on live status.
+- Concurrent connect attempts can race and overwrite selection/remotes/status. Add an in-flight guard or connection token to ignore stale completions.
+- Status messaging is a single shared string; concurrent operations overwrite each other. Consider per-operation banners/toasts or a status queue.
+- Unpaired devices still show "Connect" CTA; swap to "Pair" or disable with inline guidance.
+- Bootstrap failures (discovery/load) lack error UI and retry; add a recoverable error state.
+- Persisted app state in SharedPreferences risks size/corruption; add versioned storage + migration and partial recovery.

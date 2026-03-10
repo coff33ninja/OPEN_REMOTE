@@ -8,7 +8,7 @@ Pair the Android client with a desktop agent in one scan without manual IP entry
 
 1. The agent generates a short-lived pairing token.
 2. The agent encodes host, port, token, device metadata, and wake-target metadata in an `openremote://pair` URI. When multiple interface addresses exist, the payload can also advertise per-network connection options.
-3. The Android client scans or receives that URI.
+3. The Android client scans or receives that URI. Unpaired device cards can trigger a QR-first shortcut that falls back to the URI entry sheet when scanning is canceled.
 4. The client calls `POST /api/v1/pairing/complete` with the pairing token and device name.
 5. The agent consumes the pairing token and returns a long-lived bearer token.
 6. The client stores the bearer token and uses it for future command requests.

@@ -31,6 +31,7 @@ import 'features/remote_designer/remote_designer_screen.dart';
 import 'features/task_manager/task_manager_screen.dart';
 import 'features/updates/updates_screen.dart';
 import 'ui/themes/app_theme.dart';
+import 'ui/widgets/connection_status_pill.dart';
 import 'ui/widgets/network_route_icons.dart';
 
 void main() {
@@ -86,6 +87,11 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   final AppStateStore _appStateStore = const AppStateStore();
   final WakeOnLanClient _wakeOnLanClient = const WakeOnLanClient();
   final GitHubUpdatesService _updatesService = GitHubUpdatesService();
+  int _connectAttempt = 0;
+  late final VoidCallback _connectionListener;
+  Timer? _reconnectTimer;
+  DateTime? _lastReconnectAttempt;
+  static const Duration _reconnectInterval = Duration(seconds: 20);
 
   List<Device> _devices = const <Device>[];
   List<RemoteLayout> _remotes = const <RemoteLayout>[];
@@ -108,7 +114,46 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   @override
   void initState() {
     super.initState();
+    _connectionListener = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    _client.connectionState.addListener(_connectionListener);
+    _startReconnectLoop();
     _bootstrap();
+  }
+
+  void _startReconnectLoop() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer.periodic(_reconnectInterval, (_) {
+      if (!mounted || _loading) {
+        return;
+      }
+
+      final connectionState = _client.connectionState.value;
+      if (connectionState == RemoteConnectionState.connected ||
+          connectionState == RemoteConnectionState.connecting) {
+        return;
+      }
+
+      final device = _selectedDevice;
+      if (device == null ||
+          device.accessToken == null ||
+          device.accessToken!.isEmpty) {
+        return;
+      }
+
+      final now = DateTime.now();
+      if (_lastReconnectAttempt != null &&
+          now.difference(_lastReconnectAttempt!) < _reconnectInterval) {
+        return;
+      }
+
+      _lastReconnectAttempt = now;
+      unawaited(_connectToDevice(device, announceRestore: false));
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -186,6 +231,7 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       return;
     }
 
+    final attempt = ++_connectAttempt;
     setState(() {
       _status = 'Connecting to ${device.name}';
     });
@@ -199,17 +245,32 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       );
 
       for (final NetworkRoute route in candidates) {
+        if (attempt != _connectAttempt) {
+          return;
+        }
         final routeDevice = deviceWithRoute(device, route);
         try {
           final resolvedDevice = await _apiClient.fetchMeta(routeDevice);
+          if (attempt != _connectAttempt) {
+            return;
+          }
           await _client.connect(
             resolvedDevice.websocketUrl,
             accessToken: resolvedDevice.accessToken,
           );
+          if (attempt != _connectAttempt) {
+            return;
+          }
           final remoteCatalog = await _apiClient.fetchRemoteCatalog(
             resolvedDevice,
           );
+          if (attempt != _connectAttempt) {
+            return;
+          }
           if (!mounted) {
+            return;
+          }
+          if (attempt != _connectAttempt) {
             return;
           }
 
@@ -246,6 +307,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           await _flushPendingShares();
           return;
         } catch (error) {
+          if (attempt != _connectAttempt) {
+            return;
+          }
           lastError = error;
           failedRouteHost = route.host;
         }
@@ -255,6 +319,9 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           const SocketException('No reachable device route found.');
     } catch (error) {
       if (!mounted) {
+        return;
+      }
+      if (attempt != _connectAttempt) {
         return;
       }
 
@@ -395,62 +462,65 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     final choice = await showModalBottomSheet<_PairingRouteChoice>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (BuildContext context) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Choose a network for ${pairing.deviceName}',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Pick a transport explicitly, or let the app decide based on your saved preference for local-first versus remembered routes.',
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.auto_awesome),
-                  title: const Text('Auto select best route'),
-                  subtitle: const Text(
-                    'Try all advertised addresses. Use this if you just want the app to find a reachable path.',
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Choose a network for ${pairing.deviceName}',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  onTap: () => Navigator.of(context).pop(
-                    const _PairingRouteChoice.auto(),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Pick a transport explicitly, or let the app decide based on your saved preference for local-first versus remembered routes.',
                   ),
-                ),
-                for (final PairingNetworkOption option in networkOptions)
+                  const SizedBox(height: 16),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      networkRouteIcon(
-                        option.kind,
-                        canWake: option.canWake,
-                        isVirtual: option.isVirtual,
-                      ),
-                    ),
-                    title: Text(option.displayName),
-                    subtitle: Text(
-                      [
-                        option.kindLabel,
-                        option.host,
-                        if (option.description.trim().isNotEmpty)
-                          option.description,
-                        if (option.preferred) 'Preferred by agent',
-                        option.canWake
-                            ? 'Wake-on-LAN available'
-                            : 'No Wake-on-LAN',
-                      ].join(' • '),
+                    leading: const Icon(Icons.auto_awesome),
+                    title: const Text('Auto select best route'),
+                    subtitle: const Text(
+                      'Try all advertised addresses. Use this if you just want the app to find a reachable path.',
                     ),
                     onTap: () => Navigator.of(context).pop(
-                      _PairingRouteChoice.network(option),
+                      const _PairingRouteChoice.auto(),
                     ),
                   ),
-              ],
+                  for (final PairingNetworkOption option in networkOptions)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        networkRouteIcon(
+                          option.kind,
+                          canWake: option.canWake,
+                          isVirtual: option.isVirtual,
+                        ),
+                      ),
+                      title: Text(option.displayName),
+                      subtitle: Text(
+                        [
+                          option.kindLabel,
+                          option.host,
+                          if (option.description.trim().isNotEmpty)
+                            option.description,
+                          if (option.preferred) 'Preferred by agent',
+                          option.canWake
+                              ? 'Wake-on-LAN available'
+                              : 'No Wake-on-LAN',
+                        ].join(' • '),
+                      ),
+                      onTap: () => Navigator.of(context).pop(
+                        _PairingRouteChoice.network(option),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );
@@ -578,62 +648,65 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (BuildContext context) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Select device',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _selectionLocked
-                      ? 'Selection is locked. Unlock to auto-switch.'
-                      : 'Select a device for all controls. Lock to prevent auto-switch.',
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _selectionLocked,
-                  title: const Text('Lock selection'),
-                  onChanged: (bool value) async {
-                    Navigator.of(context).pop();
-                    await _setSelectionLocked(value);
-                  },
-                ),
-                const SizedBox(height: 8),
-                if (_devices.isEmpty)
-                  const Text('No paired devices yet.')
-                else
-                  ..._orderedDevices().map(
-                    (Device device) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        _selectedDevice?.id == device.id
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_unchecked,
-                      ),
-                      title: Text(device.name),
-                      subtitle: Text('${device.host}:${device.port}'),
-                      trailing: FilledButton(
-                        onPressed: () async {
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Select device',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _selectionLocked
+                        ? 'Selection is locked. Unlock to auto-switch.'
+                        : 'Select a device for all controls. Lock to prevent auto-switch.',
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _selectionLocked,
+                    title: const Text('Lock selection'),
+                    onChanged: (bool value) async {
+                      Navigator.of(context).pop();
+                      await _setSelectionLocked(value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  if (_devices.isEmpty)
+                    const Text('No paired devices yet.')
+                  else
+                    ..._orderedDevices().map(
+                      (Device device) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          _selectedDevice?.id == device.id
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                        ),
+                        title: Text(device.name),
+                        subtitle: Text('${device.host}:${device.port}'),
+                        trailing: FilledButton(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await _selectDevice(device);
+                          },
+                          child: const Text('Select'),
+                        ),
+                        onTap: () async {
                           Navigator.of(context).pop();
                           await _selectDevice(device);
                         },
-                        child: const Text('Select'),
                       ),
-                      onTap: () async {
-                        Navigator.of(context).pop();
-                        await _selectDevice(device);
-                      },
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -1148,6 +1221,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
 
   @override
   void dispose() {
+    _client.connectionState.removeListener(_connectionListener);
+    _reconnectTimer?.cancel();
     _shareIntentSub?.cancel();
     _client.dispose();
     super.dispose();
@@ -1287,9 +1362,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
                 Padding(
                   padding: const EdgeInsets.only(right: 16),
                   child: Center(
-                    child: _ShellStatusPill(
-                      label: _client.isConnected ? 'Connected' : 'Offline',
-                      icon: _client.isConnected ? Icons.wifi : Icons.wifi_off,
+                    child: ConnectionStatusPill(
+                      state: _client.connectionState.value,
                     ),
                   ),
                 ),
@@ -1510,42 +1584,6 @@ class _PairingRouteChoice {
   final PairingNetworkOption? network;
 
   bool get isAuto => network == null;
-}
-
-class _ShellStatusPill extends StatelessWidget {
-  const _ShellStatusPill({
-    required this.label,
-    required this.icon,
-  });
-
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0ECE4),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _DrawerSectionLabel extends StatelessWidget {

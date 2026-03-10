@@ -52,7 +52,102 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
     super.dispose();
   }
 
-  Future<void> _scanQrCode() async {
+  /// When launched from an unpaired card, try QR scan first; fall back to URI.
+  Future<void> _openPairShortcut({bool preferScanner = false}) async {
+    if (!mounted) {
+      return;
+    }
+
+    var showScannerFallbackNote = false;
+    if (preferScanner) {
+      final scannedUri = await _scanQrCode();
+      if (!mounted) {
+        return;
+      }
+      if (scannedUri != null && scannedUri.trim().isNotEmpty) {
+        return;
+      }
+      showScannerFallbackNote = true;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Pair a device',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Paste a pairing URI or scan a QR code from the desktop app.',
+                  ),
+                  if (showScannerFallbackNote) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Scan canceled. Paste a pairing URI instead.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _pairUriController,
+                    decoration: const InputDecoration(
+                      labelText: 'openremote://pair?...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: <Widget>[
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final pairUri = _pairUriController.text.trim();
+                          if (pairUri.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Paste a pairing URI first.'),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.of(context).pop();
+                          await widget.onPairUriSubmit(pairUri);
+                        },
+                        icon: const Icon(Icons.link),
+                        label: const Text('Pair via URI'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _scanQrCode();
+                        },
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Scan QR Code'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<String?> _scanQrCode() async {
     final scannedUri = await Navigator.of(context).push<String>(
       MaterialPageRoute<String>(
         builder: (BuildContext context) => const PairQrScannerScreen(),
@@ -62,6 +157,7 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
       _pairUriController.text = scannedUri;
       await widget.onPairUriSubmit(scannedUri);
     }
+    return scannedUri;
   }
 
   Future<void> _confirmDelete(Device device) async {
@@ -239,6 +335,7 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                 favoriteDeviceIds: widget.favoriteDeviceIds,
                 recentDeviceIds: widget.recentDeviceIds,
                 onConnect: widget.onConnect,
+                onPairDevice: () => _openPairShortcut(preferScanner: true),
                 onToggleFavoriteDevice: widget.onToggleFavoriteDevice,
                 onDeleteDevice: _confirmDelete,
                 onShowDetails: _showDeviceDetails,
@@ -257,6 +354,7 @@ class _ManagedDeviceCard extends StatelessWidget {
     required this.favoriteDeviceIds,
     required this.recentDeviceIds,
     required this.onConnect,
+    required this.onPairDevice,
     required this.onToggleFavoriteDevice,
     required this.onDeleteDevice,
     required this.onShowDetails,
@@ -267,6 +365,7 @@ class _ManagedDeviceCard extends StatelessWidget {
   final Set<String> favoriteDeviceIds;
   final List<String> recentDeviceIds;
   final Future<void> Function(Device device) onConnect;
+  final VoidCallback onPairDevice;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
   final Future<void> Function(Device device) onDeleteDevice;
   final Future<void> Function(Device device) onShowDetails;
@@ -276,6 +375,7 @@ class _ManagedDeviceCard extends StatelessWidget {
     final primaryRoute = device.currentRoute ??
         device.lastSuccessfulRoute ??
         device.preferredRoute;
+    final isPaired = (device.accessToken ?? '').isNotEmpty;
     final badges = <Widget>[
       if (selectedDevice?.id == device.id)
         const _DeviceBadge(label: 'Current', icon: Icons.radio_button_checked),
@@ -374,13 +474,26 @@ class _ManagedDeviceCard extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: <Widget>[
-                FilledButton.icon(
-                  onPressed: () => onConnect(device),
-                  icon: const Icon(Icons.link),
-                  label: Text(
-                    selectedDevice?.id == device.id ? 'Reconnect' : 'Connect',
+                if (isPaired)
+                  FilledButton.icon(
+                    onPressed: () => onConnect(device),
+                    icon: const Icon(Icons.link),
+                    label: Text(
+                      selectedDevice?.id == device.id ? 'Reconnect' : 'Connect',
+                    ),
+                  )
+                else ...<Widget>[
+                  FilledButton.icon(
+                    onPressed: onPairDevice,
+                    icon: const Icon(Icons.link),
+                    label: const Text('Pair'),
                   ),
-                ),
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.link_off),
+                    label: const Text('Pair first'),
+                  ),
+                ],
                 OutlinedButton.icon(
                   onPressed: () => onShowDetails(device),
                   icon: const Icon(Icons.info_outline),
@@ -410,144 +523,146 @@ class _DeviceDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final routes = device.networkRoutes;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          device.name,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text('${device.host}:${device.port}'),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: <Widget>[
-            _SummaryPill(
-              icon: Icons.visibility_outlined,
-              label: _formatTimestampLabel(
-                prefix: 'Last seen',
-                value: device.lastSeenAt,
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            device.name,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text('${device.host}:${device.port}'),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              _SummaryPill(
+                icon: Icons.visibility_outlined,
+                label: _formatTimestampLabel(
+                  prefix: 'Last seen',
+                  value: device.lastSeenAt,
+                ),
               ),
-            ),
-            _SummaryPill(
-              icon: Icons.link,
-              label: _formatTimestampLabel(
-                prefix: 'Last connected',
-                value: device.lastConnectedAt,
+              _SummaryPill(
+                icon: Icons.link,
+                label: _formatTimestampLabel(
+                  prefix: 'Last connected',
+                  value: device.lastConnectedAt,
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if ((device.lastSuccessfulRouteHost ?? '').trim().isNotEmpty)
+            Text(
+              'Last successful route: ${device.lastSuccessfulRoute?.displayName ?? device.lastSuccessfulRouteHost}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
+          if ((device.lastFailedRouteHost ?? '').trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(
+              'Last failed route: ${device.lastFailedRouteHost}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF8A3B12),
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            if ((device.lastFailureMessage ?? '').trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  device.lastFailureMessage!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF8A3B12),
+                      ),
+                ),
+              ),
           ],
-        ),
-        const SizedBox(height: 16),
-        if ((device.lastSuccessfulRouteHost ?? '').trim().isNotEmpty)
+          const SizedBox(height: 16),
           Text(
-            'Last successful route: ${device.lastSuccessfulRoute?.displayName ?? device.lastSuccessfulRouteHost}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            'Route policy',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-        if ((device.lastFailedRouteHost ?? '').trim().isNotEmpty) ...<Widget>[
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const <ButtonSegment<String>>[
+              ButtonSegment<String>(
+                value: DeviceRoutePolicy.inherit,
+                label: Text('Default'),
+                icon: Icon(Icons.auto_awesome),
+              ),
+              ButtonSegment<String>(
+                value: DeviceRoutePolicy.localFirst,
+                label: Text('Local'),
+                icon: Icon(Icons.wifi),
+              ),
+              ButtonSegment<String>(
+                value: DeviceRoutePolicy.rememberedFirst,
+                label: Text('Remembered'),
+                icon: Icon(Icons.route),
+              ),
+            ],
+            selected: <String>{device.routePolicy},
+            onSelectionChanged: (Set<String> selection) {
+              if (selection.isEmpty) {
+                return;
+              }
+              onSetRoutePolicy(selection.first);
+            },
+          ),
+          const SizedBox(height: 8),
           Text(
-            'Last failed route: ${device.lastFailedRouteHost}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF8A3B12),
-                  fontWeight: FontWeight.w600,
-                ),
+            'Default uses the global app preference. Local favors Wi-Fi and Ethernet. Remembered favors the preferred or last-working route first.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          if ((device.lastFailureMessage ?? '').trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
+          const SizedBox(height: 16),
+          Text(
+            'Advertised routes',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          if (routes.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
               child: Text(
-                device.lastFailureMessage!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF8A3B12),
-                    ),
+                  'No route metadata has been reported for this device yet.'),
+            )
+          else
+            ...routes.map(
+              (NetworkRoute route) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  networkRouteIcon(
+                    route.kind,
+                    canWake: false,
+                    isVirtual: route.isVirtual,
+                  ),
+                ),
+                title: Text(route.displayName),
+                subtitle: Text(
+                  [
+                    route.kindLabel,
+                    route.host,
+                    if (route.description.trim().isNotEmpty) route.description,
+                    if (route.isLikelyLocal) 'Likely local' else 'Remote route',
+                  ].join(' • '),
+                ),
+                trailing: route.host.trim().toLowerCase() ==
+                        (device.preferredRouteHost ?? '').trim().toLowerCase()
+                    ? const Icon(Icons.check_circle, color: Color(0xFF0F766E))
+                    : TextButton(
+                        onPressed: () => onSetPreferredRoute(route),
+                        child: const Text('Prefer'),
+                      ),
               ),
             ),
         ],
-        const SizedBox(height: 16),
-        Text(
-          'Route policy',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        SegmentedButton<String>(
-          segments: const <ButtonSegment<String>>[
-            ButtonSegment<String>(
-              value: DeviceRoutePolicy.inherit,
-              label: Text('Default'),
-              icon: Icon(Icons.auto_awesome),
-            ),
-            ButtonSegment<String>(
-              value: DeviceRoutePolicy.localFirst,
-              label: Text('Local'),
-              icon: Icon(Icons.wifi),
-            ),
-            ButtonSegment<String>(
-              value: DeviceRoutePolicy.rememberedFirst,
-              label: Text('Remembered'),
-              icon: Icon(Icons.route),
-            ),
-          ],
-          selected: <String>{device.routePolicy},
-          onSelectionChanged: (Set<String> selection) {
-            if (selection.isEmpty) {
-              return;
-            }
-            onSetRoutePolicy(selection.first);
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Default uses the global app preference. Local favors Wi-Fi and Ethernet. Remembered favors the preferred or last-working route first.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Advertised routes',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        if (routes.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: Text(
-                'No route metadata has been reported for this device yet.'),
-          )
-        else
-          ...routes.map(
-            (NetworkRoute route) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                networkRouteIcon(
-                  route.kind,
-                  canWake: false,
-                  isVirtual: route.isVirtual,
-                ),
-              ),
-              title: Text(route.displayName),
-              subtitle: Text(
-                [
-                  route.kindLabel,
-                  route.host,
-                  if (route.description.trim().isNotEmpty) route.description,
-                  if (route.isLikelyLocal) 'Likely local' else 'Remote route',
-                ].join(' • '),
-              ),
-              trailing: route.host.trim().toLowerCase() ==
-                      (device.preferredRouteHost ?? '').trim().toLowerCase()
-                  ? const Icon(Icons.check_circle, color: Color(0xFF0F766E))
-                  : TextButton(
-                      onPressed: () => onSetPreferredRoute(route),
-                      child: const Text('Prefer'),
-                    ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }

@@ -26,6 +26,7 @@ android/
 - Global device selection with a lock that prevents auto-switching when pairing or reconnecting.
 - Wake-on-LAN support for remembered agents, including remote-side `power_wake` interception and offline wake from the Power screen.
 - Authenticated WebSocket command transport.
+- Connection state tracking with socket keep-alives and a lightweight reconnect loop.
 - Local visual remote designer with live preview and JSON export.
 - Dynamic remote rendering from JSON definitions fetched from the agent.
 - Filesystem browsing against the connected agent.
@@ -35,6 +36,7 @@ android/
 - Local persistence for paired devices, recent agents, favorite agents, favorite remotes, and cached remote layouts.
 - A dedicated power screen that offers Wake-on-LAN when offline, and restart/shutdown/sleep when connected.
 - Mouse, keyboard, media, and custom remote starter experiences.
+- Unpaired device cards offer a direct pairing shortcut (QR-first with URI fallback).
 
 ## Device Selection and Power Rules
 
