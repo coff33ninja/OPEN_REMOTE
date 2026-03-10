@@ -58,12 +58,14 @@ class AgentService {
     required this.name,
     required this.displayName,
     required this.status,
+    required this.statusReason,
     required this.startType,
   });
 
   final String name;
   final String displayName;
   final String status;
+  final String statusReason;
   final String startType;
 
   factory AgentService.fromJson(Map<String, dynamic> json) {
@@ -71,6 +73,7 @@ class AgentService {
       name: json['name'] as String? ?? '',
       displayName: json['display_name'] as String? ?? '',
       status: json['status'] as String? ?? '',
+      statusReason: json['status_reason'] as String? ?? '',
       startType: json['start_type'] as String? ?? '',
     );
   }

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+repo_root="$(git rev-parse --show-toplevel)"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/update-release-notes.ps1"
+
+if ! git diff --quiet -- "$repo_root/docs/releases.md"; then
+  echo "Release notes updated. Commit docs/releases.md and retry push."
+  exit 1
+fi

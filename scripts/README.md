@@ -6,3 +6,7 @@ This directory contains repeatable repository automation:
 - `smoke-agent.ps1`: builds and launches the agent, pairs a temporary client, exercises the live API and WebSocket transport, and skips sleep and shutdown commands.
 - `build-release-artifacts.ps1`: restores Go and Flutter dependencies, builds the Windows agent plus Android release APK, and stages both under the gitignored `release-artifacts/` folder at the repo root.
 - `publish-release.ps1`: pushes a tag and creates or updates a GitHub release from the host machine using `gh`, which is the temporary release path while GitHub-hosted runners are out of scope.
+- `update-release-notes.ps1`: regenerates docs/releases.md from git tags and commit subjects, keeping release notes in sync before pushing.
+
+Optional automation:
+- Enable the pre-push hook to auto-refresh release notes and block a push until they are committed: `git config core.hooksPath .githooks`.

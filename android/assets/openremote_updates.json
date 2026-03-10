@@ -5,10 +5,11 @@
   },
   "links": {
     "releases": "https://github.com/coff33ninja/OPEN_REMOTE/releases",
-    "commits": "https://github.com/coff33ninja/OPEN_REMOTE/commits/main"
+    "commits": "https://github.com/coff33ninja/OPEN_REMOTE/commits/main",
+    "release_notes": "https://github.com/coff33ninja/OPEN_REMOTE/blob/main/docs/releases.md"
   },
   "versions": {
-    "android": "0.1.10+10",
-    "agent": "0.1.10"
+    "android": "0.1.11+11",
+    "agent": "0.1.11"
   }
 }

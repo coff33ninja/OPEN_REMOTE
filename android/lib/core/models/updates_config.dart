@@ -6,6 +6,7 @@ class UpdatesConfig {
     required this.commitsUrl,
     required this.releasesPage,
     required this.commitsPage,
+    required this.releaseNotesPage,
     this.androidVersion,
     this.agentVersion,
   });
@@ -16,6 +17,7 @@ class UpdatesConfig {
   final String commitsUrl;
   final String releasesPage;
   final String commitsPage;
+  final String releaseNotesPage;
   final String? androidVersion;
   final String? agentVersion;
 
@@ -27,6 +29,7 @@ class UpdatesConfig {
     final repo = repoJson['name'] as String? ?? '';
     final releasesPage = linksJson['releases'] as String? ?? '';
     final commitsPage = linksJson['commits'] as String? ?? '';
+    final releaseNotesPage = linksJson['release_notes'] as String? ?? '';
     return UpdatesConfig(
       owner: owner,
       repo: repo,
@@ -40,12 +43,22 @@ class UpdatesConfig {
       commitsPage: commitsPage.isEmpty
           ? _fallbackWebUrl(owner, repo, 'commits')
           : commitsPage,
+      releaseNotesPage: releaseNotesPage.isEmpty
+          ? _fallbackReleaseNotesUrl(owner, repo)
+          : releaseNotesPage,
       androidVersion: versionsJson['android'] as String?,
       agentVersion: versionsJson['agent'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
+    final links = <String, dynamic>{
+      'releases': releasesPage,
+      'commits': commitsPage,
+      'release_notes': releaseNotesPage,
+    }..removeWhere((String key, dynamic value) =>
+        value == null || (value is String && value.trim().isEmpty));
+
     return <String, dynamic>{
       'repo': <String, dynamic>{
         'owner': owner,
@@ -53,10 +66,7 @@ class UpdatesConfig {
       },
       'releases_url': releasesUrl,
       'commits_url': commitsUrl,
-      'links': <String, dynamic>{
-        'releases': releasesPage,
-        'commits': commitsPage,
-      },
+      'links': links,
       'versions': <String, dynamic>{
         'android': androidVersion,
         'agent': agentVersion,
@@ -71,6 +81,7 @@ class UpdatesConfig {
     String? commitsUrl,
     String? releasesPage,
     String? commitsPage,
+    String? releaseNotesPage,
     String? androidVersion,
     String? agentVersion,
   }) {
@@ -81,6 +92,7 @@ class UpdatesConfig {
       commitsUrl: commitsUrl ?? this.commitsUrl,
       releasesPage: releasesPage ?? this.releasesPage,
       commitsPage: commitsPage ?? this.commitsPage,
+      releaseNotesPage: releaseNotesPage ?? this.releaseNotesPage,
       androidVersion: androidVersion ?? this.androidVersion,
       agentVersion: agentVersion ?? this.agentVersion,
     );
@@ -99,4 +111,11 @@ String _fallbackWebUrl(String owner, String repo, String endpoint) {
     return '';
   }
   return 'https://github.com/$owner/$repo/$endpoint';
+}
+
+String _fallbackReleaseNotesUrl(String owner, String repo) {
+  if (owner.isEmpty || repo.isEmpty) {
+    return '';
+  }
+  return 'https://github.com/$owner/$repo/blob/main/docs/releases.md';
 }

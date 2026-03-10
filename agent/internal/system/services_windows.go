@@ -11,14 +11,17 @@ import (
 )
 
 type serviceRow struct {
-	Name        string `json:"Name"`
-	DisplayName string `json:"DisplayName"`
-	Status      string `json:"Status"`
-	StartType   string `json:"StartType"`
+	Name                    string `json:"Name"`
+	DisplayName             string `json:"DisplayName"`
+	State                   string `json:"State"`
+	Status                  string `json:"Status"`
+	StartMode               string `json:"StartMode"`
+	ExitCode                int    `json:"ExitCode"`
+	ServiceSpecificExitCode int    `json:"ServiceSpecificExitCode"`
 }
 
 func (e *Executor) ListServices() ([]ServiceInfo, error) {
-	output, err := runPowerShell(`Get-Service | Select-Object Name,DisplayName,Status,StartType | ConvertTo-Json -Depth 3`)
+	output, err := runPowerShell(`Get-CimInstance Win32_Service | Select-Object Name,DisplayName,State,Status,StartMode,ExitCode,ServiceSpecificExitCode | ConvertTo-Json -Depth 3`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +46,16 @@ func (e *Executor) ListServices() ([]ServiceInfo, error) {
 
 	services := make([]ServiceInfo, 0, len(rows))
 	for _, row := range rows {
+		status := strings.TrimSpace(row.State)
+		if status == "" {
+			status = strings.TrimSpace(row.Status)
+		}
 		services = append(services, ServiceInfo{
-			Name:        row.Name,
-			DisplayName: row.DisplayName,
-			Status:      row.Status,
-			StartType:   row.StartType,
+			Name:         row.Name,
+			DisplayName:  row.DisplayName,
+			Status:       status,
+			StatusReason: formatStatusReason(row),
+			StartType:    row.StartMode,
 		})
 	}
 
@@ -56,6 +64,21 @@ func (e *Executor) ListServices() ([]ServiceInfo, error) {
 	})
 
 	return services, nil
+}
+
+func formatStatusReason(row serviceRow) string {
+	parts := make([]string, 0, 3)
+	status := strings.TrimSpace(row.Status)
+	if status != "" && !strings.EqualFold(status, "OK") && !strings.EqualFold(status, row.State) {
+		parts = append(parts, status)
+	}
+	if row.ExitCode != 0 {
+		parts = append(parts, fmt.Sprintf("ExitCode %d", row.ExitCode))
+	}
+	if row.ServiceSpecificExitCode != 0 {
+		parts = append(parts, fmt.Sprintf("ServiceExit %d", row.ServiceSpecificExitCode))
+	}
+	return strings.Join(parts, " • ")
 }
 
 func (e *Executor) StartService(name string) error {

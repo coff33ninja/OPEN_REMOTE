@@ -42,6 +42,8 @@ class GitHubUpdatesService {
           'https://api.github.com/repos/coff33ninja/OPEN_REMOTE/commits',
       releasesPage: 'https://github.com/coff33ninja/OPEN_REMOTE/releases',
       commitsPage: 'https://github.com/coff33ninja/OPEN_REMOTE/commits/main',
+      releaseNotesPage:
+          'https://github.com/coff33ninja/OPEN_REMOTE/blob/main/docs/releases.md',
     );
   }
 

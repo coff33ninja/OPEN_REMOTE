@@ -186,6 +186,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               'Pulls GitHub releases and recent commits so users can track changes without leaving the app.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (config?.releaseNotesPage.trim().isNotEmpty == true)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openUrl(config!.releaseNotesPage),
+                    icon: const Icon(Icons.description_outlined),
+                    label: const Text('Release notes'),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

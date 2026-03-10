@@ -159,12 +159,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
               final startType = service.startType.trim().isEmpty
                   ? 'Unknown'
                   : service.startType;
+              final statusReason = service.statusReason.trim();
+              final subtitleLines = <String>[
+                '${service.name} • $status • $startType',
+                if (statusReason.isNotEmpty) 'Reason: $statusReason',
+              ];
 
               return ListTile(
                 title: Text(service.displayName.isEmpty
                     ? service.name
                     : service.displayName),
-                subtitle: Text('${service.name} • $status • $startType'),
+                subtitle: Text(subtitleLines.join('\n')),
+                isThreeLine: statusReason.isNotEmpty,
                 trailing: PopupMenuButton<_ServiceAction>(
                   onSelected: (_ServiceAction action) async {
                     switch (action) {
