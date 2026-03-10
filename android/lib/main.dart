@@ -96,6 +96,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   Timer? _reconnectTimer;
   DateTime? _lastReconnectAttempt;
   Object? _lastConnectionError;
+  RemoteConnectionState _lastConnectionState =
+      RemoteConnectionState.disconnected;
   static const Duration _reconnectInterval = Duration(seconds: 20);
 
   List<Device> _devices = const <Device>[];
@@ -123,7 +125,8 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
       if (!mounted) {
         return;
       }
-      if (_client.connectionState.value == RemoteConnectionState.error) {
+      final state = _client.connectionState.value;
+      if (state == RemoteConnectionState.error) {
         final error = _client.lastError;
         if (error != null && error != _lastConnectionError) {
           _lastConnectionError = error;
@@ -136,6 +139,12 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
           );
         }
       }
+      if (state != _lastConnectionState &&
+          (state == RemoteConnectionState.disconnected ||
+              state == RemoteConnectionState.error)) {
+        _attemptReconnect();
+      }
+      _lastConnectionState = state;
       setState(() {});
     };
     _client.connectionState.addListener(_connectionListener);
@@ -147,32 +156,36 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
   void _startReconnectLoop() {
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer.periodic(_reconnectInterval, (_) {
-      if (!mounted || _loading) {
-        return;
-      }
-
-      final connectionState = _client.connectionState.value;
-      if (connectionState == RemoteConnectionState.connected ||
-          connectionState == RemoteConnectionState.connecting) {
-        return;
-      }
-
-      final device = _selectedDevice;
-      if (device == null ||
-          device.accessToken == null ||
-          device.accessToken!.isEmpty) {
-        return;
-      }
-
-      final now = DateTime.now();
-      if (_lastReconnectAttempt != null &&
-          now.difference(_lastReconnectAttempt!) < _reconnectInterval) {
-        return;
-      }
-
-      _lastReconnectAttempt = now;
-      unawaited(_connectToDevice(device, announceRestore: false));
+      _attemptReconnect();
     });
+  }
+
+  void _attemptReconnect() {
+    if (!mounted || _loading) {
+      return;
+    }
+
+    final connectionState = _client.connectionState.value;
+    if (connectionState == RemoteConnectionState.connected ||
+        connectionState == RemoteConnectionState.connecting) {
+      return;
+    }
+
+    final device = _selectedDevice;
+    if (device == null ||
+        device.accessToken == null ||
+        device.accessToken!.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastReconnectAttempt != null &&
+        now.difference(_lastReconnectAttempt!) < _reconnectInterval) {
+      return;
+    }
+
+    _lastReconnectAttempt = now;
+    unawaited(_connectToDevice(device, announceRestore: false));
   }
 
   void _attachGlobalErrorHandlers() {

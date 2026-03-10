@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +15,7 @@ enum RemoteConnectionState {
 
 class RemoteClient {
   WebSocket? _socket;
+  StreamSubscription<dynamic>? _subscription;
   int _connectionId = 0;
   Object? _lastError;
 
@@ -51,8 +53,11 @@ class RemoteClient {
       // Send periodic pings to surface silent disconnects quickly.
       socket.pingInterval = const Duration(seconds: 15);
       connectionState.value = RemoteConnectionState.connected;
-      socket.done.then((_) => _handleSocketClosed(connectionId)).catchError(
-        (Object error) => _handleSocketError(connectionId, error),
+      _subscription = socket.listen(
+        (dynamic message) => _handleSocketMessage(connectionId, message),
+        onError: (Object error) => _handleSocketError(connectionId, error),
+        onDone: () => _handleSocketClosed(connectionId),
+        cancelOnError: true,
       );
     } catch (error) {
       if (connectionId == _connectionId) {
@@ -81,8 +86,16 @@ class RemoteClient {
   }
 
   Future<void> _closeSocket() async {
+    await _subscription?.cancel();
+    _subscription = null;
     await _socket?.close();
     _socket = null;
+  }
+
+  void _handleSocketMessage(int connectionId, Object? _) {
+    if (connectionId != _connectionId) {
+      return;
+    }
   }
 
   void _handleSocketClosed(int connectionId) {
@@ -90,6 +103,7 @@ class RemoteClient {
       return;
     }
     _socket = null;
+    _subscription = null;
     connectionState.value = RemoteConnectionState.disconnected;
   }
 
@@ -98,6 +112,7 @@ class RemoteClient {
       return;
     }
     _socket = null;
+    _subscription = null;
     _lastError = error;
     connectionState.value = RemoteConnectionState.error;
   }
