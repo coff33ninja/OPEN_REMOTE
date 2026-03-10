@@ -18,6 +18,8 @@ class RemoteClient {
   StreamSubscription<dynamic>? _subscription;
   int _connectionId = 0;
   Object? _lastError;
+  int? _lastCloseCode;
+  String? _lastCloseReason;
 
   final ValueNotifier<RemoteConnectionState> connectionState =
       ValueNotifier<RemoteConnectionState>(RemoteConnectionState.disconnected);
@@ -26,11 +28,15 @@ class RemoteClient {
       connectionState.value == RemoteConnectionState.connected;
 
   Object? get lastError => _lastError;
+  int? get lastCloseCode => _lastCloseCode;
+  String? get lastCloseReason => _lastCloseReason;
 
   Future<void> connect(Uri url, {String? accessToken}) async {
     final connectionId = ++_connectionId;
     await _closeSocket();
     _lastError = null;
+    _lastCloseCode = null;
+    _lastCloseReason = null;
     connectionState.value = RemoteConnectionState.connecting;
 
     final resolvedUrl = accessToken == null || accessToken.isEmpty
@@ -56,7 +62,11 @@ class RemoteClient {
       _subscription = socket.listen(
         (dynamic message) => _handleSocketMessage(connectionId, message),
         onError: (Object error) => _handleSocketError(connectionId, error),
-        onDone: () => _handleSocketClosed(connectionId),
+        onDone: () => _handleSocketClosed(
+          connectionId,
+          socket.closeCode,
+          socket.closeReason,
+        ),
         cancelOnError: true,
       );
     } catch (error) {
@@ -98,12 +108,18 @@ class RemoteClient {
     }
   }
 
-  void _handleSocketClosed(int connectionId) {
+  void _handleSocketClosed(
+    int connectionId,
+    int? closeCode,
+    String? closeReason,
+  ) {
     if (connectionId != _connectionId) {
       return;
     }
     _socket = null;
     _subscription = null;
+    _lastCloseCode = closeCode;
+    _lastCloseReason = closeReason;
     connectionState.value = RemoteConnectionState.disconnected;
   }
 
@@ -114,6 +130,8 @@ class RemoteClient {
     _socket = null;
     _subscription = null;
     _lastError = error;
+    _lastCloseCode = null;
+    _lastCloseReason = error.toString();
     connectionState.value = RemoteConnectionState.error;
   }
 }

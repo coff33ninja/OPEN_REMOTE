@@ -130,19 +130,23 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
         final error = _client.lastError;
         if (error != null && error != _lastConnectionError) {
           _lastConnectionError = error;
+          final context = _connectionCloseContext(state);
           unawaited(
             _reportClientError(
               error,
               screen: 'websocket',
               action: 'connection',
+              context: context,
             ),
           );
         }
       }
-      if (state != _lastConnectionState &&
-          (state == RemoteConnectionState.disconnected ||
-              state == RemoteConnectionState.error)) {
-        _attemptReconnect();
+      if (state != _lastConnectionState) {
+        if (state == RemoteConnectionState.disconnected ||
+            state == RemoteConnectionState.error) {
+          _attemptReconnect();
+          _status = _connectionStatusMessage(state);
+        }
       }
       _lastConnectionState = state;
       setState(() {});
@@ -158,6 +162,50 @@ class _RemoteHomePageState extends State<RemoteHomePage> {
     _reconnectTimer = Timer.periodic(_reconnectInterval, (_) {
       _attemptReconnect();
     });
+  }
+
+  String _connectionStatusMessage(RemoteConnectionState state) {
+    final detail = _connectionCloseDetail();
+    if (state == RemoteConnectionState.error) {
+      return detail == null ? 'Connection error' : 'Connection error ($detail)';
+    }
+    if (state == RemoteConnectionState.disconnected) {
+      return detail == null ? 'Disconnected' : 'Disconnected ($detail)';
+    }
+    return _status;
+  }
+
+  String? _connectionCloseDetail() {
+    final closeCode = _client.lastCloseCode;
+    final closeReason = _client.lastCloseReason?.trim();
+    final hasReason = closeReason != null && closeReason.isNotEmpty;
+    if (closeCode == null && !hasReason) {
+      return null;
+    }
+    if (closeCode != null && hasReason) {
+      return 'code $closeCode: $closeReason';
+    }
+    if (closeCode != null) {
+      return 'code $closeCode';
+    }
+    return closeReason;
+  }
+
+  Map<String, dynamic>? _connectionCloseContext(
+    RemoteConnectionState state,
+  ) {
+    final closeCode = _client.lastCloseCode;
+    final closeReason = _client.lastCloseReason?.trim();
+    final context = <String, dynamic>{
+      'connection_state': state.name,
+    };
+    if (closeCode != null) {
+      context['close_code'] = closeCode;
+    }
+    if (closeReason != null && closeReason.isNotEmpty) {
+      context['close_reason'] = closeReason;
+    }
+    return context;
   }
 
   void _attemptReconnect() {
