@@ -47,7 +47,6 @@ void main() {
             statusMessage: 'Ready',
             preferLocalRoutes: true,
             onConnect: (Device device) async {},
-            onWake: (Device device) async {},
             onPairUriSubmit: (String pairUri) async {},
             onToggleFavoriteDevice: (Device device) async {},
             onDeleteDevice: (Device device) async {
@@ -127,7 +126,6 @@ void main() {
             statusMessage: 'Ready',
             preferLocalRoutes: true,
             onConnect: (Device device) async {},
-            onWake: (Device device) async {},
             onPairUriSubmit: (String pairUri) async {},
             onToggleFavoriteDevice: (Device device) async {},
             onDeleteDevice: (Device device) async {},

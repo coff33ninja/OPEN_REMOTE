@@ -14,7 +14,6 @@ class DeviceManagerScreen extends StatefulWidget {
     required this.statusMessage,
     required this.preferLocalRoutes,
     required this.onConnect,
-    required this.onWake,
     required this.onPairUriSubmit,
     required this.onToggleFavoriteDevice,
     required this.onDeleteDevice,
@@ -31,7 +30,6 @@ class DeviceManagerScreen extends StatefulWidget {
   final String statusMessage;
   final bool preferLocalRoutes;
   final Future<void> Function(Device device) onConnect;
-  final Future<void> Function(Device device) onWake;
   final Future<void> Function(String pairUri) onPairUriSubmit;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
   final Future<void> Function(Device device) onDeleteDevice;
@@ -241,7 +239,6 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                 favoriteDeviceIds: widget.favoriteDeviceIds,
                 recentDeviceIds: widget.recentDeviceIds,
                 onConnect: widget.onConnect,
-                onWake: widget.onWake,
                 onToggleFavoriteDevice: widget.onToggleFavoriteDevice,
                 onDeleteDevice: _confirmDelete,
                 onShowDetails: _showDeviceDetails,
@@ -260,7 +257,6 @@ class _ManagedDeviceCard extends StatelessWidget {
     required this.favoriteDeviceIds,
     required this.recentDeviceIds,
     required this.onConnect,
-    required this.onWake,
     required this.onToggleFavoriteDevice,
     required this.onDeleteDevice,
     required this.onShowDetails,
@@ -271,7 +267,6 @@ class _ManagedDeviceCard extends StatelessWidget {
   final Set<String> favoriteDeviceIds;
   final List<String> recentDeviceIds;
   final Future<void> Function(Device device) onConnect;
-  final Future<void> Function(Device device) onWake;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
   final Future<void> Function(Device device) onDeleteDevice;
   final Future<void> Function(Device device) onShowDetails;
@@ -295,7 +290,7 @@ class _ManagedDeviceCard extends StatelessWidget {
           label: primaryRoute.kindLabel,
           icon: networkRouteIcon(
             primaryRoute.kind,
-            canWake: primaryRoute.canWake,
+            canWake: false,
             isVirtual: primaryRoute.isVirtual,
           ),
         ),
@@ -308,8 +303,6 @@ class _ManagedDeviceCard extends StatelessWidget {
               ? Icons.wifi
               : Icons.route,
         ),
-      if (device.hasWakeRoute)
-        const _DeviceBadge(label: 'Wake-ready', icon: Icons.power_settings_new),
       if (device.hasRouteIssue)
         const _DeviceBadge(label: 'Route issue', icon: Icons.error_outline),
       if ((device.accessToken ?? '').isEmpty)
@@ -365,19 +358,6 @@ class _ManagedDeviceCard extends StatelessWidget {
               runSpacing: 8,
               children: badges,
             ),
-            if (primaryRoute != null &&
-                !primaryRoute.canWake &&
-                device.hasWakeRoute)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  'Wake-on-LAN is available only on a local route for this device.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF8A3B12),
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ),
             if (device.hasRouteIssue)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -401,12 +381,6 @@ class _ManagedDeviceCard extends StatelessWidget {
                     selectedDevice?.id == device.id ? 'Reconnect' : 'Connect',
                   ),
                 ),
-                if (device.hasWakeRoute)
-                  OutlinedButton.icon(
-                    onPressed: () => onWake(device),
-                    icon: const Icon(Icons.power_settings_new),
-                    label: const Text('Wake'),
-                  ),
                 OutlinedButton.icon(
                   onPressed: () => onShowDetails(device),
                   icon: const Icon(Icons.info_outline),
@@ -551,7 +525,7 @@ class _DeviceDetailsSheet extends StatelessWidget {
               leading: Icon(
                 networkRouteIcon(
                   route.kind,
-                  canWake: route.canWake,
+                  canWake: false,
                   isVirtual: route.isVirtual,
                 ),
               ),
@@ -561,10 +535,7 @@ class _DeviceDetailsSheet extends StatelessWidget {
                   route.kindLabel,
                   route.host,
                   if (route.description.trim().isNotEmpty) route.description,
-                  if (route.canWake)
-                    'Wake-on-LAN available'
-                  else
-                    'No Wake-on-LAN',
+                  if (route.isLikelyLocal) 'Likely local' else 'Remote route',
                 ].join(' • '),
               ),
               trailing: route.host.trim().toLowerCase() ==

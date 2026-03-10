@@ -15,7 +15,6 @@ class DeviceListScreen extends StatefulWidget {
     required this.isConnected,
     required this.pendingSharedCount,
     required this.onConnect,
-    required this.onWake,
     required this.onPairUriSubmit,
     required this.onToggleFavoriteDevice,
     required this.onRefreshDevices,
@@ -30,7 +29,6 @@ class DeviceListScreen extends StatefulWidget {
   final bool isConnected;
   final int pendingSharedCount;
   final Future<void> Function(Device device) onConnect;
-  final Future<void> Function(Device device) onWake;
   final Future<void> Function(String pairUri) onPairUriSubmit;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
   final Future<void> Function() onRefreshDevices;
@@ -130,7 +128,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
             recentDeviceIds: widget.recentDeviceIds,
             isConnected: widget.isConnected,
             onConnect: widget.onConnect,
-            onWake: widget.onWake,
             onToggleFavoriteDevice: widget.onToggleFavoriteDevice,
           )
         else
@@ -202,7 +199,6 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                 favoriteDeviceIds: widget.favoriteDeviceIds,
                 recentDeviceIds: widget.recentDeviceIds,
                 onConnect: widget.onConnect,
-                onWake: widget.onWake,
                 onToggleFavoriteDevice: widget.onToggleFavoriteDevice,
               ),
             ),
@@ -371,7 +367,6 @@ class _SelectedDeviceCard extends StatelessWidget {
     required this.recentDeviceIds,
     required this.isConnected,
     required this.onConnect,
-    required this.onWake,
     required this.onToggleFavoriteDevice,
   });
 
@@ -380,7 +375,6 @@ class _SelectedDeviceCard extends StatelessWidget {
   final List<String> recentDeviceIds;
   final bool isConnected;
   final Future<void> Function(Device device) onConnect;
-  final Future<void> Function(Device device) onWake;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
 
   @override
@@ -444,19 +438,6 @@ class _SelectedDeviceCard extends StatelessWidget {
                 isConnected: isConnected,
               ),
             ),
-            if (primaryRoute != null &&
-                !primaryRoute.canWake &&
-                device.hasWakeRoute)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  'Wake-on-LAN is available on a local route, but not on the active ${primaryRoute.kindLabel.toLowerCase()} route.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF8A3B12),
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ),
             if (device.hasRouteIssue)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -480,12 +461,6 @@ class _SelectedDeviceCard extends StatelessWidget {
                   ),
                   label: Text(isConnected ? 'Reconnect' : 'Connect'),
                 ),
-                if (device.hasWakeRoute)
-                  OutlinedButton.icon(
-                    onPressed: () => onWake(device),
-                    icon: const Icon(Icons.power_settings_new),
-                    label: const Text('Wake device'),
-                  ),
               ],
             ),
           ],
@@ -502,7 +477,6 @@ class _QuickDeviceCard extends StatelessWidget {
     required this.favoriteDeviceIds,
     required this.recentDeviceIds,
     required this.onConnect,
-    required this.onWake,
     required this.onToggleFavoriteDevice,
   });
 
@@ -511,7 +485,6 @@ class _QuickDeviceCard extends StatelessWidget {
   final Set<String> favoriteDeviceIds;
   final List<String> recentDeviceIds;
   final Future<void> Function(Device device) onConnect;
-  final Future<void> Function(Device device) onWake;
   final Future<void> Function(Device device) onToggleFavoriteDevice;
 
   @override
@@ -569,19 +542,6 @@ class _QuickDeviceCard extends StatelessWidget {
                 selectedDevice: selectedDevice,
               ),
             ),
-            if (primaryRoute != null &&
-                !primaryRoute.canWake &&
-                device.hasWakeRoute)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  'Wake works only on a local route for this device.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF8A3B12),
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ),
             if (device.hasRouteIssue)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -605,12 +565,6 @@ class _QuickDeviceCard extends StatelessWidget {
                     selectedDevice?.id == device.id ? 'Reconnect' : 'Connect',
                   ),
                 ),
-                if (device.hasWakeRoute)
-                  OutlinedButton.icon(
-                    onPressed: () => onWake(device),
-                    icon: const Icon(Icons.power_settings_new),
-                    label: const Text('Wake'),
-                  ),
               ],
             ),
           ],
@@ -643,10 +597,7 @@ List<Widget> _deviceBadges({
                   device.lastSuccessfulRoute ??
                   device.preferredRoute)!
               .kind,
-          canWake: (device.currentRoute ??
-                  device.lastSuccessfulRoute ??
-                  device.preferredRoute)!
-              .canWake,
+          canWake: false,
           isVirtual: (device.currentRoute ??
                   device.lastSuccessfulRoute ??
                   device.preferredRoute)!
@@ -691,12 +642,6 @@ List<Widget> _deviceBadges({
         label: 'Paired',
         backgroundColor: Color(0xFFE5F4EA),
         icon: Icons.verified_user_outlined,
-      ),
-    if (device.hasWakeRoute)
-      const _DeviceBadgeChip(
-        label: 'Wake-ready',
-        backgroundColor: Color(0xFFF7E0D6),
-        icon: Icons.power_settings_new,
       ),
     if (device.hasRouteIssue)
       const _DeviceBadgeChip(
